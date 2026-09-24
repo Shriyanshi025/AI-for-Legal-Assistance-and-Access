@@ -13,12 +13,15 @@ import com.legalassist.service.rag.LegalQaService;
 import com.legalassist.service.search.SemanticSearchService;
 
 import jakarta.validation.Valid;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -118,6 +121,42 @@ public class DocumentController {
             @Valid @RequestBody LegalAskRequest request
     ) {
         LegalAnswerResponse response = legalQaService.askQuestion(id, request);
+        return ResponseEntity.ok(response);
+    }
+
+    @GetMapping("/{id}/view")
+    public ResponseEntity<byte[]> viewDocumentFile(@PathVariable("id") UUID id) {
+        DocumentResponse document = documentService.getDocument(id);
+        byte[] pdfBytes = documentService.downloadDocumentFile(id);
+
+        String filename = document.filename() != null ? document.filename() : "document.pdf";
+        return ResponseEntity.ok()
+                .contentType(MediaType.APPLICATION_PDF)
+                .header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"" + filename + "\"")
+                .body(pdfBytes);
+    }
+
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> deleteDocument(@PathVariable("id") UUID id) {
+        documentService.deleteDocument(id);
+        return ResponseEntity.noContent().build();
+    }
+
+    @PutMapping(value = "/{id}/replace", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<DocumentResponse> replaceDocument(
+            @PathVariable("id") UUID id,
+            @RequestParam("file") MultipartFile file
+    ) {
+        DocumentResponse response = documentService.replaceDocument(id, file);
+        return ResponseEntity.ok(response);
+    }
+
+    @PostMapping(value = "/{id}/replace", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<DocumentResponse> replaceDocumentPost(
+            @PathVariable("id") UUID id,
+            @RequestParam("file") MultipartFile file
+    ) {
+        DocumentResponse response = documentService.replaceDocument(id, file);
         return ResponseEntity.ok(response);
     }
 }

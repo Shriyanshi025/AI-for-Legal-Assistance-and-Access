@@ -425,4 +425,60 @@ class DocumentControllerTest {
 
         verify(semanticSearchService).searchSimilarChunks(docId, "termination clause", 3);
     }
+
+    @Test
+    @DisplayName("GET /api/documents/{id}/view should return 200 OK and PDF bytes with inline header")
+    void viewDocumentFileShouldReturnPdfBytes() throws Exception {
+        UUID docId = UUID.randomUUID();
+        Instant now = Instant.now();
+        DocumentResponse docResp = new DocumentResponse(
+                docId, "test.pdf", "application/pdf", 100L, DocumentStatus.READY, now, now
+        );
+
+        when(documentService.getDocument(docId)).thenReturn(docResp);
+        when(documentService.downloadDocumentFile(docId)).thenReturn("%PDF-1.4 test bytes".getBytes());
+
+        mockMvc.perform(get("/api/documents/{id}/view", docId))
+                .andExpect(status().isOk())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.header().string(
+                        org.springframework.http.HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"test.pdf\""
+                ));
+
+        verify(documentService).downloadDocumentFile(docId);
+    }
+
+    @Test
+    @DisplayName("DELETE /api/documents/{id} should return 24 No Content on successful deletion")
+    void deleteDocumentShouldReturn204NoContent() throws Exception {
+        UUID docId = UUID.randomUUID();
+
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete("/api/documents/{id}", docId))
+                .andExpect(status().isNoContent());
+
+        verify(documentService).deleteDocument(docId);
+    }
+
+    @Test
+    @DisplayName("POST /api/documents/{id}/replace should return 200 OK and updated DocumentResponse")
+    void replaceDocumentShouldReturn200OK() throws Exception {
+        UUID docId = UUID.randomUUID();
+        Instant now = Instant.now();
+
+        MockMultipartFile newFile = new MockMultipartFile(
+                "file", "new_contract.pdf", "application/pdf", "new pdf bytes".getBytes()
+        );
+
+        DocumentResponse updatedResp = new DocumentResponse(
+                docId, "new_contract.pdf", "application/pdf", 200L, DocumentStatus.READY, now, now
+        );
+
+        when(documentService.replaceDocument(eq(docId), any())).thenReturn(updatedResp);
+
+        mockMvc.perform(multipart("/api/documents/{id}/replace", docId).file(newFile))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(docId.toString()))
+                .andExpect(jsonPath("$.filename").value("new_contract.pdf"));
+
+        verify(documentService).replaceDocument(eq(docId), any());
+    }
 }

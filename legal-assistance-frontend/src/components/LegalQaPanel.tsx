@@ -1,23 +1,32 @@
 import React, { useState } from 'react';
 import { documentApi } from '../api/documentApi';
-import type { DocumentSummaryResponse, DocumentResponse, LegalAnswerResponse } from '../types/document';
+import type { DocumentSummaryResponse, DocumentResponse, LegalAnswerResponse, CitationResponse } from '../types/document';
+import { DocumentStatus } from './DocumentStatus';
 import { AnswerDisplay } from './AnswerDisplay';
+import { CitationViewerModal } from './CitationViewerModal';
 
 interface LegalQaPanelProps {
-  document: DocumentSummaryResponse | DocumentResponse;
+  document: DocumentSummaryResponse | DocumentResponse | null;
+  documentsList: DocumentSummaryResponse[];
+  onSelectDocument: (doc: DocumentSummaryResponse) => void;
 }
 
-export const LegalQaPanel: React.FC<LegalQaPanelProps> = ({ document }) => {
+export const LegalQaPanel: React.FC<LegalQaPanelProps> = ({
+  document,
+  documentsList,
+  onSelectDocument,
+}) => {
   const [question, setQuestion] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [answerResponse, setAnswerResponse] = useState<LegalAnswerResponse | null>(null);
+  const [activeCitation, setActiveCitation] = useState<CitationResponse | null>(null);
 
-  const isReady = document.status === 'READY';
+  const isReady = document?.status === 'READY';
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!question.trim()) return;
+    if (!document || !question.trim()) return;
 
     if (question.length > 1000) {
       setError('Question must not exceed 1000 characters.');
@@ -37,74 +46,120 @@ export const LegalQaPanel: React.FC<LegalQaPanelProps> = ({ document }) => {
     }
   };
 
+  const handleSelectCitation = (citation: CitationResponse) => {
+    setActiveCitation(citation);
+  };
+
+  const targetDocId = activeCitation?.documentId || document?.id;
+
   return (
-    <div className="glass-panel">
-      <div className="selected-doc-header">
-        <div>
-          <h3 style={{ fontFamily: 'var(--font-heading)', fontSize: '1.2rem', fontWeight: 600 }}>
-            {document.filename}
-          </h3>
-          <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>
-            ID: {document.id}
-          </p>
-        </div>
+    <div className="content-card qa-panel">
+      <div>
+        <h3 className="section-title">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" color="#3B82F6">
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+          </svg>
+          Legal Q&A
+        </h3>
+        <p className="section-subtitle">
+          Ask questions about your document and get accurate, grounded answers with citations.
+        </p>
       </div>
 
-      {!isReady ? (
-        <div className="empty-state" style={{ padding: '2rem 1rem' }}>
-          ⚠️ This document is not ready for Q&A yet. Click <strong>"Prepare Document for Q&A"</strong> in the sidebar to process text and embeddings.
+      {/* Document Selector Dropdown / Empty State */}
+      {!document ? (
+        <div className="doc-selector-box" style={{ padding: '12px 14px', flexDirection: 'column', alignItems: 'flex-start', gap: '2px' }}>
+          <div style={{ fontSize: '0.84rem', fontWeight: 600, color: 'var(--text-heading)' }}>
+            No Document Selected
+          </div>
+          <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+            Upload a PDF document above to start legal Q&A.
+          </div>
         </div>
       ) : (
-        <form onSubmit={handleSubmit} className="qa-input-box" style={{ marginTop: '1.25rem' }}>
-          <label style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
-            Ask a Legal Question
-          </label>
-
-          <textarea
-            className="qa-textarea"
-            placeholder="e.g., What is the notice period required for contract termination?"
-            value={question}
-            onChange={(e) => setQuestion(e.target.value)}
-            maxLength={1000}
-            disabled={isLoading}
-          />
-
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-              {question.length} / 1000 characters
-            </span>
-
-            <button
-              type="submit"
-              className="btn-primary"
-              style={{ width: 'auto', padding: '0.6rem 1.5rem', marginTop: 0 }}
-              disabled={isLoading || !question.trim()}
-            >
-              {isLoading ? (
-                <>
-                  <span className="spinner"></span>
-                  <span>Analyzing & Generating Answer...</span>
-                </>
-              ) : (
-                <>
-                  <span>🔍</span> Ask Legal Assistant
-                </>
-              )}
-            </button>
+        <div className="doc-selector-box">
+          <div className="doc-selector-info">
+            <div className="pdf-icon-badge" style={{ width: '20px', height: '20px', fontSize: '0.55rem' }}>pdf</div>
+            <span>{document.filename}</span>
           </div>
-
-          {error && (
-            <div style={{ color: 'var(--status-failed)', fontSize: '0.85rem', marginTop: '0.5rem' }}>
-              ⚠️ {error}
-            </div>
-          )}
-        </form>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <DocumentStatus status={document.status} />
+            {documentsList.length > 1 && (
+              <select
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  color: 'var(--text-subtle)',
+                  fontSize: '0.8rem',
+                  cursor: 'pointer',
+                  outline: 'none'
+                }}
+                value={document.id}
+                onChange={(e) => {
+                  const found = documentsList.find((d) => d.id === e.target.value);
+                  if (found) onSelectDocument(found);
+                }}
+              >
+                {documentsList.map((d) => (
+                  <option key={d.id} value={d.id}>{d.filename}</option>
+                ))}
+              </select>
+            )}
+          </div>
+        </div>
       )}
 
-      {answerResponse && (
-        <div style={{ marginTop: '1.5rem' }}>
-          <AnswerDisplay response={answerResponse} />
-        </div>
+      {/* Question Area */}
+      <form onSubmit={handleSubmit} className="question-form">
+        <label className="form-label">Your Question</label>
+        <textarea
+          className="question-textarea"
+          placeholder={!document ? "Please upload and select a PDF document first." : "e.g. What are the key obligations in this contract?"}
+          value={question}
+          onChange={(e) => setQuestion(e.target.value)}
+          maxLength={1000}
+          disabled={isLoading || !isReady}
+        />
+        <div className="char-counter">{question.length}/1000</div>
+
+        <button
+          type="submit"
+          className="ask-btn"
+          disabled={isLoading || !question.trim() || !isReady}
+        >
+          {isLoading ? (
+            <>
+              <span className="spinner"></span>
+              <span>Generating Answer...</span>
+            </>
+          ) : (
+            <>
+              <span>✨</span> Ask Question
+            </>
+          )}
+        </button>
+
+        {error && (
+          <div style={{ color: 'var(--status-failed-text)', fontSize: '0.78rem', marginTop: '4px', fontWeight: 500 }}>
+            ⚠️ {error}
+          </div>
+        )}
+      </form>
+
+      {/* Answer & Citations Cards */}
+      <AnswerDisplay
+        response={answerResponse}
+        onSelectCitation={handleSelectCitation}
+      />
+
+      {/* Citation Source Navigation Viewer Modal */}
+      {activeCitation && targetDocId && (
+        <CitationViewerModal
+          documentId={targetDocId}
+          documentFilename={document?.filename || 'Legal Document'}
+          citation={activeCitation}
+          onClose={() => setActiveCitation(null)}
+        />
       )}
     </div>
   );

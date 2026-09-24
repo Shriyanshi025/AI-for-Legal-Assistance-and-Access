@@ -29,6 +29,11 @@ public class GeminiEmbeddingServiceImpl implements EmbeddingService {
         this.restClient = restClient;
     }
 
+    @org.springframework.beans.factory.annotation.Autowired
+    public GeminiEmbeddingServiceImpl(EmbeddingProperties embeddingProperties, org.springframework.beans.factory.ObjectProvider<RestClient.Builder> restClientBuilderProvider) {
+        this(embeddingProperties, restClientBuilderProvider.getIfAvailable(RestClient::builder).build());
+    }
+
     @Override
     public List<Float> generateEmbedding(String text, EmbeddingTaskType taskType) {
         if (text == null || text.isBlank()) {

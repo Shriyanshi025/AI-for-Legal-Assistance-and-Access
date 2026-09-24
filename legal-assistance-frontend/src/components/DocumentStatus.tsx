@@ -7,15 +7,15 @@ interface DocumentStatusProps {
 
 export const DocumentStatus: React.FC<DocumentStatusProps> = ({ status }) => {
   switch (status) {
-    case 'UPLOADED':
-      return <span className="badge badge-uploaded">Uploaded</span>;
-    case 'PROCESSING':
-      return <span className="badge badge-processing">Processing...</span>;
     case 'READY':
-      return <span className="badge badge-ready">Ready for Q&A</span>;
+      return <span className="status-pill ready">READY</span>;
+    case 'PROCESSING':
+      return <span className="status-pill processing">PROCESSING</span>;
+    case 'UPLOADED':
+      return <span className="status-pill uploaded">UPLOADED</span>;
     case 'FAILED':
-      return <span className="badge badge-failed">Extraction Failed</span>;
+      return <span className="status-pill failed">FAILED</span>;
     default:
-      return <span className="badge">{status}</span>;
+      return <span className="status-pill uploaded">{status}</span>;
   }
 };

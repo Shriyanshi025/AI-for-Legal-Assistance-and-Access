@@ -53,6 +53,7 @@ export interface LegalAskRequest {
 }
 
 export interface CitationResponse {
+  documentId?: string;
   pageNumber: number;
   chunkIndex: number;
   excerpt: string;

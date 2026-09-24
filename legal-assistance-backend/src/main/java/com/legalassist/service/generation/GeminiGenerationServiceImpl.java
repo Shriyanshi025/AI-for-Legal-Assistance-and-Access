@@ -31,6 +31,11 @@ public class GeminiGenerationServiceImpl implements GenerationService {
         this.restClient = restClient;
     }
 
+    @org.springframework.beans.factory.annotation.Autowired
+    public GeminiGenerationServiceImpl(GenerationProperties generationProperties, org.springframework.beans.factory.ObjectProvider<RestClient.Builder> restClientBuilderProvider) {
+        this(generationProperties, restClientBuilderProvider.getIfAvailable(RestClient::builder).build());
+    }
+
     @Override
     public GeminiGenerationResponse generateAnswer(String systemInstruction, String userPrompt) {
         if (systemInstruction == null || systemInstruction.isBlank()) {

@@ -9,6 +9,8 @@ import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
 
+import org.springframework.beans.factory.ObjectProvider;
+
 @Service
 public class SupabaseStorageService implements StorageService {
 
@@ -21,6 +23,12 @@ public class SupabaseStorageService implements StorageService {
         this.properties = properties;
         this.restClient = restClientBuilder.build();
     }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public SupabaseStorageService(SupabaseStorageProperties properties, ObjectProvider<RestClient.Builder> restClientBuilderProvider) {
+        this(properties, restClientBuilderProvider.getIfAvailable(RestClient::builder));
+    }
+
 
     @Override
     public String uploadFile(String path, byte[] content, String contentType) {

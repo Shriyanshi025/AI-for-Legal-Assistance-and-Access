@@ -41,6 +41,7 @@ public class DocumentChunk {
     private Integer chunkIndex;
 
     @Column(name = "embedding", columnDefinition = "vector(768)")
+    @org.hibernate.annotations.ColumnTransformer(read = "embedding::text", write = "?::vector")
     private String embedding;
 
     public DocumentChunk(UUID id, UUID documentId, Integer pageNumber, String section, String clause, String content, Integer chunkIndex) {

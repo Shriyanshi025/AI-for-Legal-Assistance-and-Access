@@ -23,4 +23,10 @@ public interface DocumentService {
     List<com.legalassist.dto.DocumentChunkResponse> getDocumentChunks(UUID documentId);
 
     List<com.legalassist.dto.DocumentChunkResponse> generateAndSaveEmbeddings(UUID documentId);
+
+    byte[] downloadDocumentFile(UUID documentId);
+
+    void deleteDocument(UUID documentId);
+
+    DocumentResponse replaceDocument(UUID documentId, org.springframework.web.multipart.MultipartFile file);
 }

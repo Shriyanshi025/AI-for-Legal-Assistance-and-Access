@@ -74,6 +74,6 @@ public class CitationValidator {
         if (excerpt != null && excerpt.length() > 200) {
             excerpt = excerpt.substring(0, 197) + "...";
         }
-        return new CitationResponse(item.pageNumber(), item.chunkIndex(), excerpt);
+        return new CitationResponse(item.documentId(), item.pageNumber(), item.chunkIndex(), excerpt);
     }
 }

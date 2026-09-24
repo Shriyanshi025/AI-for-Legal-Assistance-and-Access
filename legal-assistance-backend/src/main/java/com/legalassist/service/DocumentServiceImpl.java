@@ -330,4 +330,111 @@ public class DocumentServiceImpl implements DocumentService {
                 .map(documentMapper::toDocumentChunkResponse)
                 .toList();
     }
+
+    @Override
+    public byte[] downloadDocumentFile(UUID documentId) {
+        Document document = documentRepository.findById(documentId)
+                .orElseThrow(() -> new DocumentNotFoundException(documentId));
+        return storageService.downloadFile(document.getStoragePath());
+    }
+
+    @Override
+    @Transactional
+    public void deleteDocument(UUID documentId) {
+        Document document = documentRepository.findById(documentId)
+                .orElseThrow(() -> new DocumentNotFoundException(documentId));
+
+        documentChunkRepository.deleteByDocumentId(documentId);
+        documentPageRepository.deleteByDocumentId(documentId);
+
+        try {
+            storageService.deleteFile(document.getStoragePath());
+        } catch (Exception e) {
+            log.warn("Non-fatal: Failed to delete storage file at path {} during document deletion: {}", document.getStoragePath(), e.getMessage());
+        }
+
+        documentRepository.delete(document);
+        log.info("Successfully deleted document {} and all associated pages, chunks, embeddings, and storage files", documentId);
+    }
+
+    @Override
+    @Transactional
+    public DocumentResponse replaceDocument(UUID documentId, MultipartFile file) {
+        Document document = documentRepository.findById(documentId)
+                .orElseThrow(() -> new DocumentNotFoundException(documentId));
+
+        if (file == null || file.isEmpty()) {
+            throw new IllegalArgumentException("Replacement file must be provided and non-empty");
+        }
+
+        byte[] bytes;
+        try {
+            bytes = file.getBytes();
+        } catch (IOException e) {
+            throw new IllegalArgumentException("Failed to read replacement file content", e);
+        }
+
+        String originalFilename = file.getOriginalFilename();
+        if (originalFilename == null || originalFilename.isBlank()) {
+            originalFilename = "unnamed_document.pdf";
+        } else {
+            int lastSep = Math.max(originalFilename.lastIndexOf('/'), originalFilename.lastIndexOf('\\'));
+            if (lastSep >= 0) {
+                originalFilename = originalFilename.substring(lastSep + 1);
+            }
+        }
+
+        if (!originalFilename.toLowerCase().endsWith(".pdf")) {
+            throw new IllegalArgumentException("Only PDF files are accepted for document replacement");
+        }
+
+        // 1. Delete old chunks and pages from DB
+        documentChunkRepository.deleteByDocumentId(documentId);
+        documentPageRepository.deleteByDocumentId(documentId);
+
+        // 2. Clean up old file from storage
+        try {
+            storageService.deleteFile(document.getStoragePath());
+        } catch (Exception e) {
+            log.warn("Non-fatal: Failed to delete old storage file at path {}: {}", document.getStoragePath(), e.getMessage());
+        }
+
+        // 3. Upload new PDF
+        String safeFilename = originalFilename.replaceAll("[^a-zA-Z0-9._-]", "_");
+        String safeStorageKey = String.format("%s/%s-%s",
+                document.getUserId() != null ? document.getUserId().toString() : "anonymous",
+                documentId,
+                safeFilename
+        );
+        String contentType = file.getContentType();
+        if (contentType == null || contentType.isBlank()) {
+            contentType = "application/pdf";
+        }
+
+        String newStoragePath = storageService.uploadFile(safeStorageKey, bytes, contentType);
+
+        // 4. Update document metadata
+        Instant now = Instant.now();
+        document.setFilename(originalFilename);
+        document.setDocumentType(contentType);
+        document.setStoragePath(newStoragePath);
+        document.setFileSize(file.getSize());
+        document.setStatus(DocumentStatus.UPLOADED);
+        document.setUpdatedAt(now);
+        Document updatedDocument = documentRepository.save(document);
+
+        log.info("Successfully uploaded replacement file for document {}. Re-processing RAG pipeline...", documentId);
+
+        // 5. Re-process text extraction, chunking, and embeddings for replacement document
+        try {
+            extractAndSaveDocumentText(documentId);
+            chunkAndSaveDocument(documentId);
+            generateAndSaveEmbeddings(documentId);
+        } catch (Exception e) {
+            log.error("Failed to automatically re-process replacement document {}: {}", documentId, e.getMessage(), e);
+        }
+
+        Document reprocessedDoc = documentRepository.findById(documentId).orElse(updatedDocument);
+        return documentMapper.toDocumentResponse(reprocessedDoc);
+    }
 }

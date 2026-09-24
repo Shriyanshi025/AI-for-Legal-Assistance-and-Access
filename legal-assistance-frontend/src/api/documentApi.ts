@@ -2,6 +2,7 @@ import type {
   DocumentResponse,
   DocumentSummaryResponse,
   DocumentChunkResponse,
+  DocumentPageResponse,
   LegalAnswerResponse,
   ApiErrorResponse
 } from '../types/document';
@@ -9,6 +10,19 @@ import type {
 const BASE_URL = 'http://localhost:8080/api/documents';
 
 export const DEFAULT_USER_ID = '00000000-0000-0000-0000-000000000001';
+
+export function getDemoUserId(): string {
+  try {
+    const stored = localStorage.getItem('demo_user_id');
+    if (stored && stored.trim().length > 0) {
+      return stored.trim();
+    }
+    localStorage.setItem('demo_user_id', DEFAULT_USER_ID);
+  } catch {
+    // Fallback if localStorage is unavailable
+  }
+  return DEFAULT_USER_ID;
+}
 
 async function handleResponse<T>(response: Response): Promise<T> {
   if (!response.ok) {
@@ -31,7 +45,7 @@ export const documentApi = {
    * Upload a legal PDF document.
    * Endpoint: POST /api/documents
    */
-  async uploadDocument(file: File, userId: string = DEFAULT_USER_ID): Promise<DocumentResponse> {
+  async uploadDocument(file: File, userId: string = getDemoUserId()): Promise<DocumentResponse> {
     const formData = new FormData();
     formData.append('file', file);
     formData.append('userId', userId);
@@ -47,7 +61,7 @@ export const documentApi = {
    * List all documents for a user.
    * Endpoint: GET /api/documents?userId={userId}
    */
-  async getUserDocuments(userId: string = DEFAULT_USER_ID): Promise<DocumentSummaryResponse[]> {
+  async getUserDocuments(userId: string = getDemoUserId()): Promise<DocumentSummaryResponse[]> {
     const response = await fetch(`${BASE_URL}?userId=${encodeURIComponent(userId)}`, {
       method: 'GET',
       headers: {
@@ -152,5 +166,64 @@ export const documentApi = {
       body: JSON.stringify({ question }),
     });
     return handleResponse<LegalAnswerResponse>(response);
+  },
+
+  /**
+   * Get direct view URL for inline browser PDF viewing.
+   * Endpoint: GET /api/documents/{id}/view
+   */
+  getDocumentViewUrl(id: string): string {
+    return `${BASE_URL}/${id}/view`;
+  },
+
+  /**
+   * Delete an uploaded document and all associated RAG chunks/embeddings.
+   * Endpoint: DELETE /api/documents/{id}
+   */
+  async deleteDocument(id: string): Promise<void> {
+    const response = await fetch(`${BASE_URL}/${id}`, {
+      method: 'DELETE',
+    });
+    if (!response.ok) {
+      let errorMessage = `Failed to delete document (${response.status})`;
+      try {
+        const errorJson = await response.json();
+        if (errorJson && errorJson.message) {
+          errorMessage = errorJson.message;
+        }
+      } catch {
+        // Ignore JSON error parse
+      }
+      throw new Error(errorMessage);
+    }
+  },
+
+  /**
+   * Get all extracted pages for a document.
+   * Endpoint: GET /api/documents/{id}/pages
+   */
+  async getDocumentPages(id: string): Promise<DocumentPageResponse[]> {
+    const response = await fetch(`${BASE_URL}/${id}/pages`, {
+      method: 'GET',
+      headers: {
+        'Accept': 'application/json',
+      },
+    });
+    return handleResponse<DocumentPageResponse[]>(response);
+  },
+
+  /**
+   * Replace an existing document with a new PDF.
+   * Endpoint: POST /api/documents/{id}/replace
+   */
+  async replaceDocument(id: string, file: File): Promise<DocumentResponse> {
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const response = await fetch(`${BASE_URL}/${id}/replace`, {
+      method: 'POST',
+      body: formData,
+    });
+    return handleResponse<DocumentResponse>(response);
   },
 };
