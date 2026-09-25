@@ -4,10 +4,12 @@ import type {
   DocumentChunkResponse,
   DocumentPageResponse,
   LegalAnswerResponse,
+  UserProfileResponse,
   ApiErrorResponse
 } from '../types/document';
 
 const BASE_URL = 'http://localhost:8080/api/documents';
+const USER_API_URL = 'http://localhost:8080/api/users';
 
 export const DEFAULT_USER_ID = '00000000-0000-0000-0000-000000000001';
 
@@ -163,7 +165,23 @@ export const documentApi = {
         'Content-Type': 'application/json',
         'Accept': 'application/json',
       },
-      body: JSON.stringify({ question }),
+      body: JSON.stringify({ question, documentIds: [id] }),
+    });
+    return handleResponse<LegalAnswerResponse>(response);
+  },
+
+  /**
+   * Ask a question scoped to multiple selected legal documents.
+   * Endpoint: POST /api/documents/ask
+   */
+  async askMultiDocumentQuestion(documentIds: string[], question: string): Promise<LegalAnswerResponse> {
+    const response = await fetch(`${BASE_URL}/ask`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      },
+      body: JSON.stringify({ question, documentIds }),
     });
     return handleResponse<LegalAnswerResponse>(response);
   },
@@ -225,5 +243,19 @@ export const documentApi = {
       body: formData,
     });
     return handleResponse<DocumentResponse>(response);
+  },
+
+  /**
+   * Fetch public user profile (short human-readable public user ID).
+   * Endpoint: GET /api/users/profile?userId={userId}
+   */
+  async getUserProfile(userId: string = getDemoUserId()): Promise<UserProfileResponse> {
+    const response = await fetch(`${USER_API_URL}/profile?userId=${encodeURIComponent(userId)}`, {
+      method: 'GET',
+      headers: {
+        'Accept': 'application/json',
+      },
+    });
+    return handleResponse<UserProfileResponse>(response);
   },
 };

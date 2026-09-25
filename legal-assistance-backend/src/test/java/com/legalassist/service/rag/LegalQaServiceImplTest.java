@@ -1,6 +1,7 @@
 package com.legalassist.service.rag;
 
 import com.legalassist.config.GenerationProperties;
+import com.legalassist.dto.CitationResponse;
 import com.legalassist.dto.LegalAskRequest;
 import com.legalassist.dto.LegalAnswerResponse;
 import com.legalassist.dto.SimilaritySearchResultResponse;
@@ -164,5 +165,128 @@ class LegalQaServiceImplTest {
         assertThatThrownBy(() -> legalQaService.askQuestion(documentId, new LegalAskRequest("Q")))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("PROCESSING");
+    }
+
+    @Test
+    @DisplayName("askMultiDocumentQuestion should retrieve chunks from single selected document [A]")
+    void askMultiDocumentQuestionSingleDoc() {
+        UUID docA = UUID.randomUUID();
+        Document documentA = new Document(docA, UUID.randomUUID(), "docA.pdf", "application/pdf", "pathA", 100L, DocumentStatus.READY, Instant.now(), Instant.now());
+        LegalAskRequest request = new LegalAskRequest("What is section 1?", List.of(docA));
+
+        SimilaritySearchResultResponse chunkA = new SimilaritySearchResultResponse(
+                UUID.randomUUID(), docA, 1, 1, "Section 1 content", "Sec 1", "Cl 1", 0.88
+        );
+        RagSourceItem item = new RagSourceItem("SRC-1", chunkA.chunkId(), docA, 1, 1, chunkA.content(), "Sec 1", "Cl 1", 0.88);
+        RagContext context = new RagContext(List.of(item), 20);
+        GeminiGenerationResponse rawGen = new GeminiGenerationResponse("Section 1 is clause A.", true, List.of("SRC-1"));
+
+        when(documentRepository.findAllById(List.of(docA))).thenReturn(List.of(documentA));
+        when(semanticSearchService.searchSimilarChunksForDocuments(eq(List.of(docA)), eq("What is section 1?"), eq(5)))
+                .thenReturn(List.of(chunkA));
+        when(ragContextBuilder.buildContext(any(), anyDouble(), anyInt())).thenReturn(context);
+        when(legalPromptBuilder.buildSystemInstruction()).thenReturn("SysInst");
+        when(legalPromptBuilder.buildUserPrompt(eq(context), eq("What is section 1?"))).thenReturn("UserPrompt");
+        when(generationService.generateAnswer("SysInst", "UserPrompt")).thenReturn(rawGen);
+        when(citationValidator.validateAndBuildResponse(rawGen, context))
+                .thenReturn(new LegalAnswerResponse("Section 1 is clause A.", true, List.of(
+                        new CitationResponse(docA, 1, 1, "Section 1 content")
+                )));
+
+        LegalAnswerResponse response = legalQaService.askMultiDocumentQuestion(List.of(docA), request);
+
+        assertThat(response.answer()).isEqualTo("Section 1 is clause A.");
+        assertThat(response.grounded()).isTrue();
+        assertThat(response.citations()).hasSize(1);
+        assertThat(response.citations().get(0).documentId()).isEqualTo(docA);
+        verify(semanticSearchService).searchSimilarChunksForDocuments(eq(List.of(docA)), any(), anyInt());
+    }
+
+    @Test
+    @DisplayName("askMultiDocumentQuestion should retrieve and synthesize chunks from multiple selected documents [A, B]")
+    void askMultiDocumentQuestionMultipleDocs() {
+        UUID docA = UUID.randomUUID();
+        UUID docB = UUID.randomUUID();
+        Document documentA = new Document(docA, UUID.randomUUID(), "docA.pdf", "application/pdf", "pathA", 100L, DocumentStatus.READY, Instant.now(), Instant.now());
+        Document documentB = new Document(docB, UUID.randomUUID(), "docB.pdf", "application/pdf", "pathB", 200L, DocumentStatus.READY, Instant.now(), Instant.now());
+        LegalAskRequest request = new LegalAskRequest("Compare termination terms", List.of(docA, docB));
+
+        SimilaritySearchResultResponse chunkA = new SimilaritySearchResultResponse(
+                UUID.randomUUID(), docA, 2, 1, "Doc A 30 days notice", "Sec 2", "Cl 1", 0.90
+        );
+        SimilaritySearchResultResponse chunkB = new SimilaritySearchResultResponse(
+                UUID.randomUUID(), docB, 5, 3, "Doc B 60 days notice", "Sec 4", "Cl 2", 0.85
+        );
+
+        RagSourceItem itemA = new RagSourceItem("SRC-1", chunkA.chunkId(), docA, 2, 1, chunkA.content(), "Sec 2", "Cl 1", 0.90);
+        RagSourceItem itemB = new RagSourceItem("SRC-2", chunkB.chunkId(), docB, 5, 3, chunkB.content(), "Sec 4", "Cl 2", 0.85);
+        RagContext context = new RagContext(List.of(itemA, itemB), 40);
+        GeminiGenerationResponse rawGen = new GeminiGenerationResponse("Doc A requires 30 days while Doc B requires 60 days.", true, List.of("SRC-1", "SRC-2"));
+
+        when(documentRepository.findAllById(List.of(docA, docB))).thenReturn(List.of(documentA, documentB));
+        when(semanticSearchService.searchSimilarChunksForDocuments(eq(List.of(docA, docB)), eq("Compare termination terms"), eq(5)))
+                .thenReturn(List.of(chunkA, chunkB));
+        when(ragContextBuilder.buildContext(any(), anyDouble(), anyInt())).thenReturn(context);
+        when(legalPromptBuilder.buildSystemInstruction()).thenReturn("SysInst");
+        when(legalPromptBuilder.buildUserPrompt(eq(context), eq("Compare termination terms"))).thenReturn("UserPrompt");
+        when(generationService.generateAnswer("SysInst", "UserPrompt")).thenReturn(rawGen);
+
+        CitationResponse citA = new CitationResponse(docA, 2, 1, "Doc A 30 days notice");
+        CitationResponse citB = new CitationResponse(docB, 5, 3, "Doc B 60 days notice");
+        when(citationValidator.validateAndBuildResponse(rawGen, context))
+                .thenReturn(new LegalAnswerResponse("Doc A requires 30 days while Doc B requires 60 days.", true, List.of(citA, citB)));
+
+        LegalAnswerResponse response = legalQaService.askMultiDocumentQuestion(List.of(docA, docB), request);
+
+        assertThat(response.answer()).contains("Doc A").contains("Doc B");
+        assertThat(response.citations()).hasSize(2);
+        assertThat(response.citations().get(0).documentId()).isEqualTo(docA);
+        assertThat(response.citations().get(1).documentId()).isEqualTo(docB);
+    }
+
+    @Test
+    @DisplayName("askMultiDocumentQuestion should exclude unselected documents B and C when only A is selected")
+    void askMultiDocumentQuestionExcludesUnselectedDocs() {
+        UUID docA = UUID.randomUUID();
+        UUID docB = UUID.randomUUID();
+        UUID docC = UUID.randomUUID();
+
+        Document documentA = new Document(docA, UUID.randomUUID(), "docA.pdf", "application/pdf", "pathA", 100L, DocumentStatus.READY, Instant.now(), Instant.now());
+        LegalAskRequest request = new LegalAskRequest("Query only A", List.of(docA));
+
+        when(documentRepository.findAllById(List.of(docA))).thenReturn(List.of(documentA));
+        // Search is strictly called with docA, docB and docC are never passed to search
+        when(semanticSearchService.searchSimilarChunksForDocuments(eq(List.of(docA)), any(), anyInt()))
+                .thenReturn(List.of());
+
+        LegalAnswerResponse response = legalQaService.askMultiDocumentQuestion(List.of(docA), request);
+
+        assertThat(response.grounded()).isFalse();
+        verify(semanticSearchService).searchSimilarChunksForDocuments(eq(List.of(docA)), eq("Query only A"), eq(5));
+        verify(semanticSearchService, never()).searchSimilarChunksForDocuments(eq(List.of(docB)), any(), anyInt());
+        verify(semanticSearchService, never()).searchSimilarChunksForDocuments(eq(List.of(docC)), any(), anyInt());
+    }
+
+    @Test
+    @DisplayName("askMultiDocumentQuestion should throw IllegalArgumentException when documentIds list is empty")
+    void askMultiDocumentQuestionThrowsWhenEmptyDocIds() {
+        LegalAskRequest request = new LegalAskRequest("Question", List.of());
+
+        assertThatThrownBy(() -> legalQaService.askMultiDocumentQuestion(List.of(), request))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("At least one document ID must be selected");
+    }
+
+    @Test
+    @DisplayName("askMultiDocumentQuestion should throw IllegalArgumentException when selected document does not exist")
+    void askMultiDocumentQuestionThrowsWhenDocNotFound() {
+        UUID nonExistent = UUID.randomUUID();
+        LegalAskRequest request = new LegalAskRequest("Question", List.of(nonExistent));
+
+        when(documentRepository.findAllById(List.of(nonExistent))).thenReturn(List.of());
+
+        assertThatThrownBy(() -> legalQaService.askMultiDocumentQuestion(List.of(nonExistent), request))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("One or more selected documents do not exist");
     }
 }

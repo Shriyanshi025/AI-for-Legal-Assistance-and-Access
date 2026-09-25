@@ -115,11 +115,27 @@ public class DocumentController {
         return ResponseEntity.ok(results);
     }
 
+    @PostMapping("/ask")
+    public ResponseEntity<LegalAnswerResponse> askMultiDocumentQuestion(
+            @Valid @RequestBody LegalAskRequest request
+    ) {
+        List<UUID> docIds = request.documentIds();
+        if (docIds == null || docIds.isEmpty()) {
+            throw new IllegalArgumentException("Please select at least one document before asking a question.");
+        }
+        LegalAnswerResponse response = legalQaService.askMultiDocumentQuestion(docIds, request);
+        return ResponseEntity.ok(response);
+    }
+
     @PostMapping("/{id}/ask")
     public ResponseEntity<LegalAnswerResponse> askQuestion(
             @PathVariable("id") UUID id,
             @Valid @RequestBody LegalAskRequest request
     ) {
+        if (request.documentIds() != null && !request.documentIds().isEmpty()) {
+            LegalAnswerResponse response = legalQaService.askMultiDocumentQuestion(request.documentIds(), request);
+            return ResponseEntity.ok(response);
+        }
         LegalAnswerResponse response = legalQaService.askQuestion(id, request);
         return ResponseEntity.ok(response);
     }

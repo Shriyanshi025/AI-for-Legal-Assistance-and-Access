@@ -93,4 +93,53 @@ public class LegalQaServiceImpl implements LegalQaService {
 
         return citationValidator.validateAndBuildResponse(rawResponse, ragContext);
     }
+
+    @Override
+    public LegalAnswerResponse askMultiDocumentQuestion(List<UUID> documentIds, LegalAskRequest request) {
+        if (documentIds == null || documentIds.isEmpty()) {
+            throw new IllegalArgumentException("At least one document ID must be selected");
+        }
+        if (request == null || request.question() == null || request.question().isBlank()) {
+            throw new IllegalArgumentException("Question cannot be null or blank");
+        }
+
+        List<Document> documents = documentRepository.findAllById(documentIds);
+        if (documents.size() != documentIds.size()) {
+            throw new IllegalArgumentException("One or more selected documents do not exist");
+        }
+
+        for (Document doc : documents) {
+            if (doc.getStatus() != DocumentStatus.READY) {
+                throw new IllegalStateException("Document '" + doc.getFilename() + "' is not ready for Q&A. Current status: " + doc.getStatus());
+            }
+        }
+
+        String question = request.question().trim();
+        int topK = generationProperties.getTopK();
+        double minSimilarity = generationProperties.getMinSimilarity();
+        int maxContextChars = generationProperties.getMaxContextChars();
+
+        List<SimilaritySearchResultResponse> chunks = semanticSearchService.searchSimilarChunksForDocuments(documentIds, question, topK);
+
+        if (chunks == null || chunks.isEmpty()) {
+            log.info("Zero vector search results for {} documents question: '{}'. Returning insufficient context.", documentIds.size(), question);
+            return new LegalAnswerResponse(CitationValidator.INSUFFICIENT_CONTEXT_ANSWER, false, List.of());
+        }
+
+        RagContext ragContext = ragContextBuilder.buildContext(chunks, minSimilarity, maxContextChars);
+
+        if (ragContext.isEmpty()) {
+            log.info("Zero chunks passed min-similarity gate ({}) for {} documents question: '{}'. Gemini will NOT be invoked.",
+                    minSimilarity, documentIds.size(), question);
+            return new LegalAnswerResponse(CitationValidator.INSUFFICIENT_CONTEXT_ANSWER, false, List.of());
+        }
+
+        String systemInstruction = legalPromptBuilder.buildSystemInstruction();
+        String userPrompt = legalPromptBuilder.buildUserPrompt(ragContext, question);
+
+        log.info("Invoking Gemini generation for {} selected documents with {} context chunks", documentIds.size(), ragContext.items().size());
+        GeminiGenerationResponse rawResponse = generationService.generateAnswer(systemInstruction, userPrompt);
+
+        return citationValidator.validateAndBuildResponse(rawResponse, ragContext);
+    }
 }

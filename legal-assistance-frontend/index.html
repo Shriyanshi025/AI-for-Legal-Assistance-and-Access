@@ -4,9 +4,76 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>legal-assistance-frontend</title>
+    <title>AI Legal Assistant — Grounded Legal Intelligence</title>
+
+    <style>
+      /* Hide all Google Translate top toolbar banner elements completely */
+      .goog-te-banner-frame,
+      .goog-te-banner,
+      .skiptranslate.goog-te-gadget-simple,
+      iframe.goog-te-banner-frame,
+      iframe[id=":2.container"],
+      iframe.VIpgJd-ZVi9od-ORHb-OEVmcd,
+      .VIpgJd-ZVi9od-OR2L6d-2b0bBv,
+      .VIpgJd-ZVi9od-ORHb-OEVmcd {
+        display: none !important;
+        visibility: hidden !important;
+        height: 0 !important;
+        width: 0 !important;
+        opacity: 0 !important;
+        pointer-events: none !important;
+      }
+      body, html {
+        top: 0px !important;
+        position: static !important;
+        margin-top: 0px !important;
+        padding-top: 0px !important;
+      }
+      .goog-te-menu-value span {
+        text-decoration: none !important;
+      }
+      #goog-gt-tt, .goog-te-balloon-frame {
+        display: none !important;
+      }
+      .goog-text-highlight {
+        background: none !important;
+        box-shadow: none !important;
+      }
+    </style>
+    <script type="text/javascript">
+      (function() {
+        var observer = new MutationObserver(function() {
+          if (document.body && document.body.style.top !== '0px') {
+            document.body.style.top = '0px';
+          }
+          var banner = document.getElementById(':2.container') || document.querySelector('iframe.VIpgJd-ZVi9od-ORHb-OEVmcd');
+          if (banner) {
+            banner.style.display = 'none';
+            banner.style.visibility = 'hidden';
+            banner.style.height = '0px';
+          }
+        });
+        observer.observe(document.documentElement, {
+          attributes: true,
+          childList: true,
+          subtree: true,
+          attributeFilter: ['style', 'class']
+        });
+      })();
+    </script>
   </head>
   <body>
+    <div id="google_translate_element" style="display:none;"></div>
+    <script type="text/javascript">
+      function googleTranslateElementInit() {
+        new google.translate.TranslateElement({
+          pageLanguage: 'en',
+          autoDisplay: false,
+          layout: google.translate.TranslateElement.InlineLayout.SIMPLE
+        }, 'google_translate_element');
+      }
+    </script>
+    <script type="text/javascript" src="https://translate.google.com/translate_a/element.js?cb=googleTranslateElementInit"></script>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

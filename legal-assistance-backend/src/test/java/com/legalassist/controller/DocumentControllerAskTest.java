@@ -118,4 +118,60 @@ class DocumentControllerAskTest {
                 .andExpect(jsonPath("$.status").value(404))
                 .andExpect(jsonPath("$.message").value("Document not found with id: " + missingId));
     }
+
+    @Test
+    @DisplayName("POST /api/documents/ask should return 200 OK for multi-document ask request")
+    void askMultiDocumentQuestionShouldReturn200() throws Exception {
+        UUID docA = UUID.randomUUID();
+        UUID docB = UUID.randomUUID();
+        CitationResponse citationA = new CitationResponse(docA, 1, 2, "Doc A excerpt");
+        CitationResponse citationB = new CitationResponse(docB, 3, 4, "Doc B excerpt");
+
+        LegalAnswerResponse response = new LegalAnswerResponse(
+                "Combined answer for Doc A and Doc B",
+                true,
+                List.of(citationA, citationB)
+        );
+
+        when(legalQaService.askMultiDocumentQuestion(eq(List.of(docA, docB)), any())).thenReturn(response);
+
+        String jsonReq = String.format("""
+                {
+                    "question": "What are the termination terms?",
+                    "documentIds": ["%s", "%s"]
+                }
+                """, docA, docB);
+
+        mockMvc.perform(post("/api/documents/ask")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(jsonReq)
+                        .accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.answer").value("Combined answer for Doc A and Doc B"))
+                .andExpect(jsonPath("$.grounded").value(true))
+                .andExpect(jsonPath("$.citations.length()").value(2))
+                .andExpect(jsonPath("$.citations[0].documentId").value(docA.toString()))
+                .andExpect(jsonPath("$.citations[1].documentId").value(docB.toString()));
+
+        verify(legalQaService).askMultiDocumentQuestion(eq(List.of(docA, docB)), any());
+    }
+
+    @Test
+    @DisplayName("POST /api/documents/ask should return 400 Bad Request when documentIds is empty")
+    void askMultiDocumentQuestionShouldReturn400WhenEmptyDocIds() throws Exception {
+        String jsonReq = """
+                {
+                    "question": "What are the termination terms?",
+                    "documentIds": []
+                }
+                """;
+
+        mockMvc.perform(post("/api/documents/ask")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(jsonReq)
+                        .accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status").value(400))
+                .andExpect(jsonPath("$.message").value("Please select at least one document before asking a question."));
+    }
 }

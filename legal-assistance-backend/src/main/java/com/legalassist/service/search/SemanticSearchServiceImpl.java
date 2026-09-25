@@ -74,4 +74,43 @@ public class SemanticSearchServiceImpl implements SemanticSearchService {
                 ))
                 .toList();
     }
+
+    @Override
+    public List<SimilaritySearchResultResponse> searchSimilarChunksForDocuments(List<UUID> documentIds, String query, int topK) {
+        if (documentIds == null || documentIds.isEmpty()) {
+            throw new IllegalArgumentException("Document IDs list cannot be null or empty");
+        }
+
+        if (query == null || query.isBlank()) {
+            throw new IllegalArgumentException("Search query cannot be null or blank");
+        }
+
+        if (topK <= 0 || topK > 100) {
+            throw new IllegalArgumentException("topK must be between 1 and 100");
+        }
+
+        List<Float> queryVector = embeddingService.generateEmbedding(query, EmbeddingTaskType.RETRIEVAL_QUERY);
+        String formattedVector = VectorUtils.formatPgVector(queryVector);
+
+        List<ChunkSimilarityProjection> projections = documentChunkRepository.findSimilarChunksForDocuments(
+                documentIds,
+                formattedVector,
+                topK
+        );
+
+        log.info("Found {} similar chunks for {} documents with query topK={}", projections.size(), documentIds.size(), topK);
+
+        return projections.stream()
+                .map(p -> new SimilaritySearchResultResponse(
+                        p.getId(),
+                        p.getDocumentId(),
+                        p.getPageNumber(),
+                        p.getChunkIndex(),
+                        p.getContent(),
+                        p.getSection(),
+                        p.getClause(),
+                        p.getSimilarityScore()
+                ))
+                .toList();
+    }
 }

@@ -1,8 +1,28 @@
-import React from 'react';
-import { getDemoUserId } from '../api/documentApi';
+import React, { useState, useEffect } from 'react';
+import { documentApi } from '../api/documentApi';
+import { LanguageSelector } from './LanguageSelector';
 
 export const Navbar: React.FC = () => {
-  const userId = getDemoUserId();
+  const [publicUserId, setPublicUserId] = useState<string>('USR-LOADING');
+
+  useEffect(() => {
+    let isMounted = true;
+    documentApi.getUserProfile()
+      .then((profile) => {
+        if (isMounted && profile && profile.publicUserId) {
+          setPublicUserId(profile.publicUserId);
+        }
+      })
+      .catch(() => {
+        if (isMounted) {
+          setPublicUserId('USR-DEFAULT');
+        }
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   return (
     <header className="header-card">
@@ -17,12 +37,16 @@ export const Navbar: React.FC = () => {
         <span className="brand-tagline">Your Legal Documents, Smarter</span>
       </div>
 
-      <div className="user-badge">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" />
-          <circle cx="12" cy="7" r="4" />
-        </svg>
-        <span>User ID: {userId}</span>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+        <LanguageSelector />
+
+        <div className="user-badge" title="Public User ID for display and sharing">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" />
+            <circle cx="12" cy="7" r="4" />
+          </svg>
+          <span className="notranslate">User ID: {publicUserId}</span>
+        </div>
       </div>
     </header>
   );

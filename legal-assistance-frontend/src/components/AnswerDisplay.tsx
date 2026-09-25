@@ -6,9 +6,14 @@ import { StructuredAnswer } from './StructuredAnswer';
 interface AnswerDisplayProps {
   response: LegalAnswerResponse | null;
   onSelectCitation?: (citation: CitationResponse) => void;
+  activeDocumentId?: string;
 }
 
-export const AnswerDisplay: React.FC<AnswerDisplayProps> = ({ response, onSelectCitation }) => {
+export const AnswerDisplay: React.FC<AnswerDisplayProps> = ({
+  response,
+  onSelectCitation,
+  activeDocumentId,
+}) => {
   return (
     <>
       {/* Answer Sub-card */}
@@ -58,7 +63,7 @@ export const AnswerDisplay: React.FC<AnswerDisplayProps> = ({ response, onSelect
           Citations
         </div>
         <p style={{ fontSize: '0.72rem', color: 'var(--text-subtle)', marginTop: '-8px', marginBottom: '12px' }}>
-          Click any citation source to navigate directly to that document page and context
+          Click "View Source" to inspect context in-app, or "Open in New Tab" to view the full PDF natively.
         </p>
 
         {!response || !response.citations || response.citations.length === 0 ? (
@@ -80,6 +85,7 @@ export const AnswerDisplay: React.FC<AnswerDisplayProps> = ({ response, onSelect
                 citation={cit}
                 index={idx}
                 onSelectCitation={onSelectCitation}
+                activeDocumentId={activeDocumentId}
               />
             ))}
           </div>

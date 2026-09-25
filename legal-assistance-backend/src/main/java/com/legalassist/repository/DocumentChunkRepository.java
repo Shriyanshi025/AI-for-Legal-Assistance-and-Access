@@ -40,4 +40,25 @@ public interface DocumentChunkRepository extends JpaRepository<DocumentChunk, UU
             @Param("queryVector") String queryVector,
             @Param("topK") int topK
     );
+
+    @Query(value = """
+        SELECT c.id AS id,
+               c.document_id AS documentId,
+               c.page_number AS pageNumber,
+               c.chunk_index AS chunkIndex,
+               c.content AS content,
+               c.section AS section,
+               c.clause AS clause,
+               (1.0 - (c.embedding <=> CAST(:queryVector AS vector))) AS similarityScore
+        FROM document_chunks c
+        WHERE c.document_id IN (:documentIds)
+          AND c.embedding IS NOT NULL
+        ORDER BY c.embedding <=> CAST(:queryVector AS vector) ASC
+        LIMIT :topK
+        """, nativeQuery = true)
+    List<ChunkSimilarityProjection> findSimilarChunksForDocuments(
+            @Param("documentIds") List<UUID> documentIds,
+            @Param("queryVector") String queryVector,
+            @Param("topK") int topK
+    );
 }

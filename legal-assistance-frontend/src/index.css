@@ -1087,11 +1087,78 @@ body::before {
   outline: none;
 }
 
-/* Interactive Citation Card */
+/* Interactive Citation Card & Grouped Actions */
 .interactive-citation-card:hover,
 .interactive-citation-card:focus {
   border-color: var(--primary-blue);
   box-shadow: 0 4px 12px rgba(59, 130, 246, 0.12);
+  outline: none;
+}
+
+.citation-item-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  margin-bottom: 6px;
+  flex-wrap: wrap;
+}
+
+.badge-ref {
+  color: var(--text-subtle);
+  font-size: 0.68rem;
+  font-weight: 500;
+  margin-right: auto;
+}
+
+.citation-actions-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+}
+
+.citation-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 9px;
+  border-radius: 12px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: none;
+  transition: all 0.2s ease;
+  line-height: 1.2;
+}
+
+.citation-view-source-btn {
+  background: var(--bg-card);
+  color: var(--primary-blue);
+  border: 1px solid var(--border-color);
+}
+
+.citation-view-source-btn:hover,
+.citation-view-source-btn:focus {
+  background: var(--light-blue-bg);
+  border-color: var(--primary-blue);
+  color: var(--primary-blue-hover);
+  outline: none;
+}
+
+.citation-open-newtab-btn {
+  background: #F0F9FF;
+  color: #0284C7;
+  border: 1px solid #BAE6FD;
+}
+
+.citation-open-newtab-btn:hover,
+.citation-open-newtab-btn:focus {
+  background: #E0F2FE;
+  border-color: #0284C7;
+  color: #0369A1;
+  box-shadow: 0 2px 6px rgba(2, 132, 199, 0.15);
   outline: none;
 }
 
@@ -1156,5 +1223,151 @@ mark.cited-excerpt-highlight {
 .answer-numbered-list li {
   line-height: 1.55;
 }
+
+/* RAG Selected Document Row Highlight */
+.rag-selected-row {
+  background-color: var(--light-blue-pill) !important;
+}
+
+/* Language Selector Component Styling */
+.language-selector-wrapper {
+  position: relative;
+  display: inline-block;
+}
+
+.language-selector-btn {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-pill);
+  padding: 6px 14px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-heading);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.2s ease;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+.language-selector-btn:hover,
+.language-selector-btn:focus {
+  border-color: var(--primary-blue);
+  background: var(--bg-subcard);
+  outline: none;
+}
+
+.lang-icon {
+  font-size: 0.95rem;
+}
+
+.lang-flag {
+  font-size: 1rem;
+}
+
+.lang-label {
+  white-space: nowrap;
+}
+
+.lang-arrow {
+  font-size: 0.65rem;
+  color: var(--text-subtle);
+  margin-left: 2px;
+}
+
+.language-dropdown-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  width: 280px;
+  max-height: 380px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 14px;
+  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.14);
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.language-search-box {
+  padding: 10px;
+  border-bottom: 1px solid var(--border-light);
+  background: var(--bg-subcard);
+}
+
+.language-search-box input {
+  width: 100%;
+  padding: 6px 10px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  font-size: 0.78rem;
+  color: var(--text-main);
+  outline: none;
+  box-sizing: border-box;
+  background: var(--bg-card);
+}
+
+.language-search-box input:focus {
+  border-color: var(--primary-blue);
+}
+
+.language-options-list {
+  padding: 6px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.language-group-header {
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: var(--text-subtle);
+  letter-spacing: 0.5px;
+  padding: 6px 10px 4px 10px;
+}
+
+.language-option-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  border-radius: 8px;
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--text-main);
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.language-option-item:hover {
+  background: var(--bg-subcard);
+}
+
+.language-option-item.selected {
+  background: var(--light-blue-bg);
+  color: var(--primary-blue-hover);
+  font-weight: 700;
+}
+
+.opt-flag {
+  font-size: 1.05rem;
+}
+
+.opt-name {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.opt-check {
+  font-size: 0.85rem;
+  color: var(--primary-blue);
+  font-weight: 700;
+}
+
+
 
 

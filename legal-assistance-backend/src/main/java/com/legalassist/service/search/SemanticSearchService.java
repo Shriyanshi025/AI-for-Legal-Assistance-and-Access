@@ -8,4 +8,6 @@ import java.util.UUID;
 public interface SemanticSearchService {
 
     List<SimilaritySearchResultResponse> searchSimilarChunks(UUID documentId, String query, int topK);
+
+    List<SimilaritySearchResultResponse> searchSimilarChunksForDocuments(List<UUID> documentIds, String query, int topK);
 }

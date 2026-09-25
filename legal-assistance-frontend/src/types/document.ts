@@ -10,6 +10,11 @@ export interface DocumentResponse {
   updatedAt: string;
 }
 
+export interface UserProfileResponse {
+  id: string;
+  publicUserId: string;
+}
+
 export interface DocumentSummaryResponse {
   id: string;
   filename: string;
@@ -50,6 +55,7 @@ export interface SimilaritySearchResultResponse {
 
 export interface LegalAskRequest {
   question: string;
+  documentIds?: string[];
 }
 
 export interface CitationResponse {
