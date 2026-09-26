@@ -17,6 +17,16 @@ class HealthControllerTest {
     private MockMvc mockMvc;
 
     @Test
+    void rootEndpointReturnsOkAndCorrectJson() throws Exception {
+        mockMvc.perform(get("/")
+                        .accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.application").value("Legal Assist"))
+                .andExpect(jsonPath("$.status").value("UP"))
+                .andExpect(jsonPath("$.message").value("Legal Assist backend is running"));
+    }
+
+    @Test
     void healthEndpointReturnsOkAndCorrectJson() throws Exception {
         mockMvc.perform(get("/api/health")
                         .accept(MediaType.APPLICATION_JSON))

@@ -75,4 +75,15 @@ class GlobalExceptionHandlerTest {
                 .andExpect(jsonPath("$.trace").doesNotExist())
                 .andExpect(jsonPath("$.message").value(not(containsString("Secret database connection password"))));
     }
+
+    @Test
+    void noResourceFoundExceptionReturns404WithFormattedFields() throws Exception {
+        mockMvc.perform(get("/test-errors/no-resource"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.timestamp").exists())
+                .andExpect(jsonPath("$.status").value(404))
+                .andExpect(jsonPath("$.error").value("Not Found"))
+                .andExpect(jsonPath("$.message").value(containsString("Resource not found")))
+                .andExpect(jsonPath("$.path").value("/test-errors/no-resource"));
+    }
 }

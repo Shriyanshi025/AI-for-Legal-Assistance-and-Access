@@ -34,4 +34,9 @@ public class TestErrorController {
     public String triggerUnexpected() {
         throw new RuntimeException("Secret database connection password leaked in internal error");
     }
+
+    @GetMapping("/no-resource")
+    public String triggerNoResourceFound() throws org.springframework.web.servlet.resource.NoResourceFoundException {
+        throw new org.springframework.web.servlet.resource.NoResourceFoundException(org.springframework.http.HttpMethod.GET, "/test-errors/no-resource");
+    }
 }
