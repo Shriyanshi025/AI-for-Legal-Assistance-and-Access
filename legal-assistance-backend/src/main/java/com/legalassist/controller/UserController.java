@@ -23,11 +23,19 @@ public class UserController {
         this.userService = userService;
     }
 
+    private UUID resolveUserId(UUID queryUserId) {
+        org.springframework.security.core.Authentication auth = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+        if (auth != null && auth.isAuthenticated() && auth.getPrincipal() instanceof com.legalassist.security.UserPrincipal principal) {
+            return principal.getId();
+        }
+        return queryUserId != null ? queryUserId : DEFAULT_DEMO_USER_ID;
+    }
+
     @GetMapping("/profile")
     public ResponseEntity<UserProfileResponse> getUserProfile(
             @RequestParam(value = "userId", required = false) UUID userId
     ) {
-        UUID targetId = userId != null ? userId : DEFAULT_DEMO_USER_ID;
+        UUID targetId = resolveUserId(userId);
         UserProfileResponse response = userService.getUserProfile(targetId);
         return ResponseEntity.ok(response);
     }
@@ -36,7 +44,8 @@ public class UserController {
     public ResponseEntity<UserProfileResponse> getUserProfileByPath(
             @PathVariable("userId") UUID userId
     ) {
-        UserProfileResponse response = userService.getUserProfile(userId);
+        UUID targetId = resolveUserId(userId);
+        UserProfileResponse response = userService.getUserProfile(targetId);
         return ResponseEntity.ok(response);
     }
 }

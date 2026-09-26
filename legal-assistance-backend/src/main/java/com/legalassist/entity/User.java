@@ -26,6 +26,25 @@ public class User {
     @Column(name = "public_user_id", unique = true, nullable = false, length = 32)
     private String publicUserId;
 
+    @Column(name = "email", unique = true)
+    private String email;
+
+    @Column(name = "password_hash")
+    private String passwordHash;
+
+    @Column(name = "full_name")
+    private String fullName;
+
+    @Column(name = "enabled")
+    private Boolean enabled = true;
+
     @Column(name = "created_at")
     private Instant createdAt;
+
+    public User(UUID id, String publicUserId, Instant createdAt) {
+        this.id = id;
+        this.publicUserId = publicUserId;
+        this.createdAt = createdAt;
+        this.enabled = true;
+    }
 }

@@ -289,4 +289,29 @@ class LegalQaServiceImplTest {
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("One or more selected documents do not exist");
     }
+
+    @Test
+    @DisplayName("askMultiDocumentQuestion should throw AccessDeniedException when one of the documents belongs to another user [H, I]")
+    void askMultiDocumentQuestionThrowsAccessDeniedForUnauthorizedDocument() {
+        UUID userA = UUID.randomUUID();
+        UUID userB = UUID.randomUUID();
+        UUID docA = UUID.randomUUID();
+        UUID docB = UUID.randomUUID();
+
+        Instant now = Instant.now();
+        Document documentA = new Document(docA, userA, "docA.pdf", "application/pdf", "pathA", 100L, DocumentStatus.READY, now, now);
+        Document documentB = new Document(docB, userB, "docB.pdf", "application/pdf", "pathB", 200L, DocumentStatus.READY, now, now);
+
+        LegalAskRequest request = new LegalAskRequest("Synthesize information", List.of(docA, docB));
+
+        when(documentRepository.findAllById(List.of(docA, docB))).thenReturn(List.of(documentA, documentB));
+
+        assertThatThrownBy(() -> legalQaService.askMultiDocumentQuestion(List.of(docA, docB), request, userA))
+                .isInstanceOf(com.legalassist.exception.AccessDeniedException.class)
+                .hasMessageContaining("Access denied");
+
+        // CRITICAL SECURITY RULE: Gemini generation service is NEVER invoked for unauthorized requests
+        verify(generationService, never()).generateAnswer(any(), any());
+        verify(semanticSearchService, never()).searchSimilarChunksForDocuments(any(), any(), anyInt());
+    }
 }

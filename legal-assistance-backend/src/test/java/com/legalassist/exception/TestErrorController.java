@@ -35,6 +35,16 @@ public class TestErrorController {
         throw new RuntimeException("Secret database connection password leaked in internal error");
     }
 
+    @GetMapping("/access-denied")
+    public String triggerAccessDenied() {
+        throw new AccessDeniedException("Access denied to requested resource");
+    }
+
+    @GetMapping("/storage-error")
+    public String triggerStorageError() {
+        throw new StorageException("Internal storage key bucket-secret-key-123 failed to read /var/data/private.pdf");
+    }
+
     @GetMapping("/no-resource")
     public String triggerNoResourceFound() throws org.springframework.web.servlet.resource.NoResourceFoundException {
         throw new org.springframework.web.servlet.resource.NoResourceFoundException(

@@ -19,6 +19,26 @@ public class GlobalExceptionHandler {
 
     private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
+    @ExceptionHandler(org.springframework.security.authentication.BadCredentialsException.class)
+    public ResponseEntity<ApiErrorResponse> handleBadCredentialsException(
+            org.springframework.security.authentication.BadCredentialsException ex,
+            HttpServletRequest request
+    ) {
+        String message = ex.getMessage() != null && !ex.getMessage().isBlank()
+                ? ex.getMessage()
+                : "Invalid credentials";
+
+        ApiErrorResponse errorResponse = new ApiErrorResponse(
+                Instant.now(),
+                HttpStatus.UNAUTHORIZED.value(),
+                HttpStatus.UNAUTHORIZED.getReasonPhrase(),
+                message,
+                request.getRequestURI()
+        );
+
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(errorResponse);
+    }
+
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ApiErrorResponse> handleMethodArgumentNotValidException(
             MethodArgumentNotValidException ex,

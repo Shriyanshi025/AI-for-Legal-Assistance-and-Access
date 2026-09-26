@@ -54,7 +54,7 @@ class DocumentControllerAskTest {
                 List.of(citation)
         );
 
-        when(legalQaService.askQuestion(eq(docId), any())).thenReturn(response);
+        when(legalQaService.askQuestion(eq(docId), any(), any())).thenReturn(response);
 
         String jsonReq = """
                 {
@@ -74,7 +74,7 @@ class DocumentControllerAskTest {
                 .andExpect(jsonPath("$.citations[0].chunkIndex").value(12))
                 .andExpect(jsonPath("$.citations[0].excerpt").value("Either party may terminate on 30 days notice."));
 
-        verify(legalQaService).askQuestion(eq(docId), any());
+        verify(legalQaService).askQuestion(eq(docId), any(), any());
     }
 
     @Test
@@ -101,7 +101,7 @@ class DocumentControllerAskTest {
     @DisplayName("POST /api/documents/{id}/ask should return 404 Not Found when document does not exist")
     void askQuestionShouldReturn404WhenNotFound() throws Exception {
         UUID missingId = UUID.randomUUID();
-        when(legalQaService.askQuestion(eq(missingId), any()))
+        when(legalQaService.askQuestion(eq(missingId), any(), any()))
                 .thenThrow(new DocumentNotFoundException(missingId));
 
         String jsonReq = """
@@ -133,7 +133,7 @@ class DocumentControllerAskTest {
                 List.of(citationA, citationB)
         );
 
-        when(legalQaService.askMultiDocumentQuestion(eq(List.of(docA, docB)), any())).thenReturn(response);
+        when(legalQaService.askMultiDocumentQuestion(eq(List.of(docA, docB)), any(), any())).thenReturn(response);
 
         String jsonReq = String.format("""
                 {
@@ -153,7 +153,7 @@ class DocumentControllerAskTest {
                 .andExpect(jsonPath("$.citations[0].documentId").value(docA.toString()))
                 .andExpect(jsonPath("$.citations[1].documentId").value(docB.toString()));
 
-        verify(legalQaService).askMultiDocumentQuestion(eq(List.of(docA, docB)), any());
+        verify(legalQaService).askMultiDocumentQuestion(eq(List.of(docA, docB)), any(), any());
     }
 
     @Test

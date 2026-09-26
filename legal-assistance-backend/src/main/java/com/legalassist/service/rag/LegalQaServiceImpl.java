@@ -6,6 +6,7 @@ import com.legalassist.dto.LegalAnswerResponse;
 import com.legalassist.dto.SimilaritySearchResultResponse;
 import com.legalassist.entity.Document;
 import com.legalassist.entity.DocumentStatus;
+import com.legalassist.exception.AccessDeniedException;
 import com.legalassist.exception.DocumentNotFoundException;
 import com.legalassist.repository.DocumentRepository;
 import com.legalassist.service.generation.GeminiGenerationResponse;
@@ -51,6 +52,11 @@ public class LegalQaServiceImpl implements LegalQaService {
 
     @Override
     public LegalAnswerResponse askQuestion(UUID documentId, LegalAskRequest request) {
+        return askQuestion(documentId, request, null);
+    }
+
+    @Override
+    public LegalAnswerResponse askQuestion(UUID documentId, LegalAskRequest request, UUID userId) {
         if (documentId == null) {
             throw new IllegalArgumentException("Document ID cannot be null");
         }
@@ -60,6 +66,11 @@ public class LegalQaServiceImpl implements LegalQaService {
 
         Document document = documentRepository.findById(documentId)
                 .orElseThrow(() -> new DocumentNotFoundException(documentId));
+
+        if (userId != null && document.getUserId() != null && !document.getUserId().equals(userId)) {
+            log.warn("User ID {} attempted unauthorized Q&A on document {}", userId, documentId);
+            throw new AccessDeniedException("Access denied: You do not own document " + documentId);
+        }
 
         if (document.getStatus() != DocumentStatus.READY) {
             throw new IllegalStateException("Document is not ready for Q&A. Current status: " + document.getStatus());
@@ -96,6 +107,11 @@ public class LegalQaServiceImpl implements LegalQaService {
 
     @Override
     public LegalAnswerResponse askMultiDocumentQuestion(List<UUID> documentIds, LegalAskRequest request) {
+        return askMultiDocumentQuestion(documentIds, request, null);
+    }
+
+    @Override
+    public LegalAnswerResponse askMultiDocumentQuestion(List<UUID> documentIds, LegalAskRequest request, UUID userId) {
         if (documentIds == null || documentIds.isEmpty()) {
             throw new IllegalArgumentException("At least one document ID must be selected");
         }
@@ -109,6 +125,10 @@ public class LegalQaServiceImpl implements LegalQaService {
         }
 
         for (Document doc : documents) {
+            if (userId != null && doc.getUserId() != null && !doc.getUserId().equals(userId)) {
+                log.warn("User ID {} attempted unauthorized multi-document Q&A on document {}", userId, doc.getId());
+                throw new AccessDeniedException("Access denied: Document '" + doc.getFilename() + "' does not belong to user");
+            }
             if (doc.getStatus() != DocumentStatus.READY) {
                 throw new IllegalStateException("Document '" + doc.getFilename() + "' is not ready for Q&A. Current status: " + doc.getStatus());
             }

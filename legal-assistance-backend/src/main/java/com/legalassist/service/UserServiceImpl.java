@@ -55,7 +55,7 @@ public class UserServiceImpl implements UserService {
     @Transactional
     public UserProfileResponse getUserProfile(UUID internalId) {
         User user = getOrCreateUser(internalId);
-        return new UserProfileResponse(user.getId(), user.getPublicUserId());
+        return new UserProfileResponse(user.getId(), user.getPublicUserId(), user.getFullName(), user.getEmail());
     }
 
     @Override

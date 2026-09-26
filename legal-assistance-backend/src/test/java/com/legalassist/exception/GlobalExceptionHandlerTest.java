@@ -77,6 +77,27 @@ class GlobalExceptionHandlerTest {
     }
 
     @Test
+    void accessDeniedExceptionReturns403WithFormattedFields() throws Exception {
+        mockMvc.perform(get("/test-errors/access-denied"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.timestamp").exists())
+                .andExpect(jsonPath("$.status").value(403))
+                .andExpect(jsonPath("$.error").value("Forbidden"))
+                .andExpect(jsonPath("$.message").value("Access denied to requested resource"))
+                .andExpect(jsonPath("$.path").value("/test-errors/access-denied"));
+    }
+
+    @Test
+    void storageExceptionSanitizesInternalPathsAndDetails() throws Exception {
+        mockMvc.perform(get("/test-errors/storage-error"))
+                .andExpect(status().isInternalServerError())
+                .andExpect(jsonPath("$.status").value(500))
+                .andExpect(jsonPath("$.message").value("Storage service error occurred"))
+                .andExpect(jsonPath("$.message").value(not(containsString("/var/data/private.pdf"))))
+                .andExpect(jsonPath("$.message").value(not(containsString("bucket-secret-key-123"))));
+    }
+
+    @Test
     void noResourceFoundExceptionReturns404WithFormattedFields() throws Exception {
         mockMvc.perform(get("/test-errors/no-resource"))
                 .andExpect(status().isNotFound())

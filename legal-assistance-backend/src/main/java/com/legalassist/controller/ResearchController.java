@@ -29,6 +29,14 @@ public class ResearchController {
         this.userService = userService;
     }
 
+    private UUID resolveUserId(UUID queryUserId) {
+        org.springframework.security.core.Authentication auth = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+        if (auth != null && auth.isAuthenticated() && auth.getPrincipal() instanceof com.legalassist.security.UserPrincipal principal) {
+            return principal.getId();
+        }
+        return userService.getOrCreateUser(queryUserId).getId();
+    }
+
     @PostMapping
     public ResponseEntity<LegalResearchResponse> startResearch(
             @RequestParam(value = "userId", required = false) UUID userId,
@@ -37,7 +45,7 @@ public class ResearchController {
         log.info("Research request received: question length={}, document count={}",
                 request != null && request.researchQuestion() != null ? request.researchQuestion().length() : 0,
                 request != null && request.documentIds() != null ? request.documentIds().size() : 0);
-        UUID effectiveUserId = userService.getOrCreateUser(userId).getId();
+        UUID effectiveUserId = resolveUserId(userId);
         LegalResearchResponse response = legalResearchService.executeResearch(effectiveUserId, request);
         return ResponseEntity.ok(response);
     }
@@ -46,7 +54,7 @@ public class ResearchController {
     public ResponseEntity<List<ResearchSessionSummaryResponse>> getResearchSessions(
             @RequestParam(value = "userId", required = false) UUID userId
     ) {
-        UUID effectiveUserId = userService.getOrCreateUser(userId).getId();
+        UUID effectiveUserId = resolveUserId(userId);
         List<ResearchSessionSummaryResponse> sessions = legalResearchService.getUserResearchSessions(effectiveUserId);
         return ResponseEntity.ok(sessions);
     }
@@ -56,7 +64,7 @@ public class ResearchController {
             @PathVariable("id") UUID id,
             @RequestParam(value = "userId", required = false) UUID userId
     ) {
-        UUID effectiveUserId = userService.getOrCreateUser(userId).getId();
+        UUID effectiveUserId = resolveUserId(userId);
         LegalResearchResponse response = legalResearchService.getResearchSession(id, effectiveUserId);
         return ResponseEntity.ok(response);
     }
@@ -67,7 +75,7 @@ public class ResearchController {
             @RequestParam(value = "userId", required = false) UUID userId,
             @Valid @RequestBody com.legalassist.dto.research.FollowUpResearchRequest request
     ) {
-        UUID effectiveUserId = userService.getOrCreateUser(userId).getId();
+        UUID effectiveUserId = resolveUserId(userId);
         com.legalassist.dto.research.FollowUpResearchResponse response = legalResearchService.executeFollowUp(id, effectiveUserId, request);
         return ResponseEntity.ok(response);
     }
@@ -78,7 +86,7 @@ public class ResearchController {
             @RequestParam(value = "userId", required = false) UUID userId,
             @Valid @RequestBody com.legalassist.dto.research.RenameResearchSessionRequest request
     ) {
-        UUID effectiveUserId = userService.getOrCreateUser(userId).getId();
+        UUID effectiveUserId = resolveUserId(userId);
         ResearchSessionSummaryResponse response = legalResearchService.renameResearchSession(id, effectiveUserId, request);
         return ResponseEntity.ok(response);
     }
@@ -88,7 +96,7 @@ public class ResearchController {
             @PathVariable("id") UUID id,
             @RequestParam(value = "userId", required = false) UUID userId
     ) {
-        UUID effectiveUserId = userService.getOrCreateUser(userId).getId();
+        UUID effectiveUserId = resolveUserId(userId);
         legalResearchService.deleteResearchSession(id, effectiveUserId);
         return ResponseEntity.noContent().build();
     }

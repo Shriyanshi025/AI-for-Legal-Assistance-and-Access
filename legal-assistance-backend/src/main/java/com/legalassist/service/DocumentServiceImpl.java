@@ -74,8 +74,14 @@ public class DocumentServiceImpl implements DocumentService {
 
     @Override
     public DocumentResponse getDocument(UUID documentId) {
+        return getDocument(documentId, null);
+    }
+
+    @Override
+    public DocumentResponse getDocument(UUID documentId, UUID userId) {
         Document document = documentRepository.findById(documentId)
                 .orElseThrow(() -> new DocumentNotFoundException(documentId));
+        validateDocumentOwnership(document, userId);
         return documentMapper.toDocumentResponse(document);
     }
 
@@ -90,9 +96,7 @@ public class DocumentServiceImpl implements DocumentService {
     @Override
     @Transactional
     public DocumentResponse uploadDocument(MultipartFile file, UUID userId) {
-        if (file == null || file.isEmpty()) {
-            throw new IllegalArgumentException("Document file must be provided and non-empty");
-        }
+        validatePdfFile(file);
 
         byte[] bytes;
         try {
@@ -103,7 +107,7 @@ public class DocumentServiceImpl implements DocumentService {
 
         String originalFilename = file.getOriginalFilename();
         if (originalFilename == null || originalFilename.isBlank()) {
-            originalFilename = "unnamed_document";
+            originalFilename = "unnamed_document.pdf";
         } else {
             // Strip paths to prevent directory traversal
             int lastSep = Math.max(originalFilename.lastIndexOf('/'), originalFilename.lastIndexOf('\\'));
@@ -122,7 +126,7 @@ public class DocumentServiceImpl implements DocumentService {
 
         String contentType = file.getContentType();
         if (contentType == null || contentType.isBlank()) {
-            contentType = "application/octet-stream";
+            contentType = "application/pdf";
         }
 
         String storagePath = storageService.uploadFile(safeStorageKey, bytes, contentType);
@@ -159,8 +163,15 @@ public class DocumentServiceImpl implements DocumentService {
     @Override
     @Transactional
     public DocumentResponse extractAndSaveDocumentText(UUID documentId) {
+        return extractAndSaveDocumentText(documentId, null);
+    }
+
+    @Override
+    @Transactional
+    public DocumentResponse extractAndSaveDocumentText(UUID documentId, UUID userId) {
         Document document = documentRepository.findById(documentId)
                 .orElseThrow(() -> new DocumentNotFoundException(documentId));
+        validateDocumentOwnership(document, userId);
 
         boolean isPdf = (document.getFilename() != null && document.getFilename().toLowerCase().endsWith(".pdf"))
                 || (document.getDocumentType() != null && document.getDocumentType().toLowerCase().contains("pdf"));
@@ -223,9 +234,14 @@ public class DocumentServiceImpl implements DocumentService {
 
     @Override
     public List<DocumentPageResponse> getDocumentPages(UUID documentId) {
-        if (!documentRepository.existsById(documentId)) {
-            throw new DocumentNotFoundException(documentId);
-        }
+        return getDocumentPages(documentId, null);
+    }
+
+    @Override
+    public List<DocumentPageResponse> getDocumentPages(UUID documentId, UUID userId) {
+        Document document = documentRepository.findById(documentId)
+                .orElseThrow(() -> new DocumentNotFoundException(documentId));
+        validateDocumentOwnership(document, userId);
         List<DocumentPage> pages = documentPageRepository.findByDocumentIdOrderByPageNumberAsc(documentId);
         return pages.stream()
                 .map(documentMapper::toDocumentPageResponse)
@@ -235,8 +251,15 @@ public class DocumentServiceImpl implements DocumentService {
     @Override
     @Transactional
     public List<DocumentChunkResponse> chunkAndSaveDocument(UUID documentId) {
+        return chunkAndSaveDocument(documentId, null);
+    }
+
+    @Override
+    @Transactional
+    public List<DocumentChunkResponse> chunkAndSaveDocument(UUID documentId, UUID userId) {
         Document document = documentRepository.findById(documentId)
                 .orElseThrow(() -> new DocumentNotFoundException(documentId));
+        validateDocumentOwnership(document, userId);
 
         if (document.getStatus() != DocumentStatus.READY) {
             throw new IllegalStateException("Document is not ready for chunking. Current status: " + document.getStatus());
@@ -284,9 +307,14 @@ public class DocumentServiceImpl implements DocumentService {
 
     @Override
     public List<DocumentChunkResponse> getDocumentChunks(UUID documentId) {
-        if (!documentRepository.existsById(documentId)) {
-            throw new DocumentNotFoundException(documentId);
-        }
+        return getDocumentChunks(documentId, null);
+    }
+
+    @Override
+    public List<DocumentChunkResponse> getDocumentChunks(UUID documentId, UUID userId) {
+        Document document = documentRepository.findById(documentId)
+                .orElseThrow(() -> new DocumentNotFoundException(documentId));
+        validateDocumentOwnership(document, userId);
         List<DocumentChunk> chunks = documentChunkRepository.findByDocumentIdOrderByChunkIndexAsc(documentId);
         return chunks.stream()
                 .map(documentMapper::toDocumentChunkResponse)
@@ -296,8 +324,15 @@ public class DocumentServiceImpl implements DocumentService {
     @Override
     @Transactional
     public List<DocumentChunkResponse> generateAndSaveEmbeddings(UUID documentId) {
+        return generateAndSaveEmbeddings(documentId, null);
+    }
+
+    @Override
+    @Transactional
+    public List<DocumentChunkResponse> generateAndSaveEmbeddings(UUID documentId, UUID userId) {
         Document document = documentRepository.findById(documentId)
                 .orElseThrow(() -> new DocumentNotFoundException(documentId));
+        validateDocumentOwnership(document, userId);
 
         if (document.getStatus() != DocumentStatus.READY) {
             throw new IllegalStateException("Document is not ready for embedding generation. Current status: " + document.getStatus());
@@ -333,16 +368,29 @@ public class DocumentServiceImpl implements DocumentService {
 
     @Override
     public byte[] downloadDocumentFile(UUID documentId) {
+        return downloadDocumentFile(documentId, null);
+    }
+
+    @Override
+    public byte[] downloadDocumentFile(UUID documentId, UUID userId) {
         Document document = documentRepository.findById(documentId)
                 .orElseThrow(() -> new DocumentNotFoundException(documentId));
+        validateDocumentOwnership(document, userId);
         return storageService.downloadFile(document.getStoragePath());
     }
 
     @Override
     @Transactional
     public void deleteDocument(UUID documentId) {
+        deleteDocument(documentId, null);
+    }
+
+    @Override
+    @Transactional
+    public void deleteDocument(UUID documentId, UUID userId) {
         Document document = documentRepository.findById(documentId)
                 .orElseThrow(() -> new DocumentNotFoundException(documentId));
+        validateDocumentOwnership(document, userId);
 
         documentChunkRepository.deleteByDocumentId(documentId);
         documentPageRepository.deleteByDocumentId(documentId);
@@ -360,12 +408,16 @@ public class DocumentServiceImpl implements DocumentService {
     @Override
     @Transactional
     public DocumentResponse replaceDocument(UUID documentId, MultipartFile file) {
+        return replaceDocument(documentId, file, null);
+    }
+
+    @Override
+    @Transactional
+    public DocumentResponse replaceDocument(UUID documentId, MultipartFile file, UUID userId) {
         Document document = documentRepository.findById(documentId)
                 .orElseThrow(() -> new DocumentNotFoundException(documentId));
-
-        if (file == null || file.isEmpty()) {
-            throw new IllegalArgumentException("Replacement file must be provided and non-empty");
-        }
+        validateDocumentOwnership(document, userId);
+        validatePdfFile(file);
 
         byte[] bytes;
         try {
@@ -382,10 +434,6 @@ public class DocumentServiceImpl implements DocumentService {
             if (lastSep >= 0) {
                 originalFilename = originalFilename.substring(lastSep + 1);
             }
-        }
-
-        if (!originalFilename.toLowerCase().endsWith(".pdf")) {
-            throw new IllegalArgumentException("Only PDF files are accepted for document replacement");
         }
 
         // 1. Delete old chunks and pages from DB
@@ -427,14 +475,50 @@ public class DocumentServiceImpl implements DocumentService {
 
         // 5. Re-process text extraction, chunking, and embeddings for replacement document
         try {
-            extractAndSaveDocumentText(documentId);
-            chunkAndSaveDocument(documentId);
-            generateAndSaveEmbeddings(documentId);
+            extractAndSaveDocumentText(documentId, userId);
+            chunkAndSaveDocument(documentId, userId);
+            generateAndSaveEmbeddings(documentId, userId);
         } catch (Exception e) {
             log.error("Failed to automatically re-process replacement document {}: {}", documentId, e.getMessage(), e);
         }
 
         Document reprocessedDoc = documentRepository.findById(documentId).orElse(updatedDocument);
         return documentMapper.toDocumentResponse(reprocessedDoc);
+    }
+
+    private void validateDocumentOwnership(Document document, UUID userId) {
+        if (userId != null && document != null && document.getUserId() != null && !document.getUserId().equals(userId)) {
+            log.warn("User ID {} attempted unauthorized access to document {}", userId, document.getId());
+            throw new com.legalassist.exception.AccessDeniedException("Access denied: Document does not belong to user");
+        }
+    }
+
+    private void validatePdfFile(MultipartFile file) {
+        if (file == null || file.isEmpty()) {
+            throw new IllegalArgumentException("Document file must be provided and non-empty");
+        }
+
+        long maxSizeBytes = 20 * 1024 * 1024L; // 20 MB max size
+        if (file.getSize() > maxSizeBytes) {
+            throw new IllegalArgumentException("Uploaded file exceeds maximum allowed limit of 20 MB");
+        }
+
+        String originalFilename = file.getOriginalFilename();
+        if (originalFilename != null && !originalFilename.isBlank()) {
+            if (!originalFilename.toLowerCase().endsWith(".pdf")) {
+                throw new IllegalArgumentException("Only PDF files (.pdf) are allowed");
+            }
+        }
+
+        byte[] bytes;
+        try {
+            bytes = file.getBytes();
+        } catch (IOException e) {
+            throw new IllegalArgumentException("Failed to read uploaded file content", e);
+        }
+
+        if (bytes.length < 4 || bytes[0] != 0x25 || bytes[1] != 0x50 || bytes[2] != 0x44 || bytes[3] != 0x46) {
+            throw new IllegalArgumentException("Invalid file format. The file is not a valid PDF document (missing %PDF header signature)");
+        }
     }
 }

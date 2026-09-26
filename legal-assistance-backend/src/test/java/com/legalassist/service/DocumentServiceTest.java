@@ -155,11 +155,12 @@ class DocumentServiceTest {
     @DisplayName("uploadDocument should upload file to storage and persist document metadata")
     void uploadDocumentShouldStoreFileAndPersistMetadata() {
         UUID userId = UUID.randomUUID();
+        byte[] pdfBytes = "%PDF-1.4 sample pdf content".getBytes();
         MockMultipartFile file = new MockMultipartFile(
                 "file",
                 "test_contract.pdf",
                 "application/pdf",
-                "sample pdf content".getBytes()
+                pdfBytes
         );
 
         when(storageService.uploadFile(anyString(), any(byte[].class), eq("application/pdf")))
@@ -173,7 +174,7 @@ class DocumentServiceTest {
         assertThat(response).isNotNull();
         assertThat(response.filename()).isEqualTo("test_contract.pdf");
         assertThat(response.documentType()).isEqualTo("application/pdf");
-        assertThat(response.fileSize()).isEqualTo("sample pdf content".getBytes().length);
+        assertThat(response.fileSize()).isEqualTo(pdfBytes.length);
         assertThat(response.status()).isEqualTo(DocumentStatus.UPLOADED);
 
         ArgumentCaptor<Document> docCaptor = ArgumentCaptor.forClass(Document.class);
@@ -192,11 +193,11 @@ class DocumentServiceTest {
 
         assertThatThrownBy(() -> documentService.uploadDocument(emptyFile, userId))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("non-empty");
+                .hasMessageContaining("provided and non-empty");
 
         assertThatThrownBy(() -> documentService.uploadDocument(null, userId))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("non-empty");
+                .hasMessageContaining("provided and non-empty");
 
         verify(storageService, never()).uploadFile(anyString(), any(), anyString());
         verify(documentRepository, never()).save(any());
@@ -206,7 +207,7 @@ class DocumentServiceTest {
     @DisplayName("uploadDocument should not persist database entity when storage upload fails")
     void uploadDocumentShouldNotPersistEntityWhenStorageFails() {
         UUID userId = UUID.randomUUID();
-        MockMultipartFile file = new MockMultipartFile("file", "contract.pdf", "application/pdf", "data".getBytes());
+        MockMultipartFile file = new MockMultipartFile("file", "contract.pdf", "application/pdf", "%PDF-1.4 data".getBytes());
 
         when(storageService.uploadFile(anyString(), any(byte[].class), anyString()))
                 .thenThrow(new StorageException("Storage error"));
@@ -221,7 +222,7 @@ class DocumentServiceTest {
     @DisplayName("uploadDocument should cleanup storage file if database save fails after upload")
     void uploadDocumentShouldCleanupStorageIfDbSaveFails() {
         UUID userId = UUID.randomUUID();
-        MockMultipartFile file = new MockMultipartFile("file", "contract.pdf", "application/pdf", "data".getBytes());
+        MockMultipartFile file = new MockMultipartFile("file", "contract.pdf", "application/pdf", "%PDF-1.4 data".getBytes());
 
         when(storageService.uploadFile(anyString(), any(byte[].class), anyString()))
                 .thenReturn("user/123-contract.pdf");
@@ -299,12 +300,18 @@ class DocumentServiceTest {
     @DisplayName("getDocumentPages should return mapped DocumentPageResponse list")
     void getDocumentPagesShouldReturnMappedPages() {
         UUID docId = UUID.randomUUID();
+        UUID userId = UUID.randomUUID();
         Instant now = Instant.now();
+
+        Document document = new Document(
+                docId, userId, "lease.pdf", "application/pdf",
+                "storage/path/lease.pdf", 1024L, DocumentStatus.READY, now, now
+        );
 
         DocumentPage page1 = new DocumentPage(UUID.randomUUID(), docId, 1, "Page 1 Content", now);
         DocumentPage page2 = new DocumentPage(UUID.randomUUID(), docId, 2, "Page 2 Content", now);
 
-        when(documentRepository.existsById(docId)).thenReturn(true);
+        when(documentRepository.findById(docId)).thenReturn(Optional.of(document));
         when(documentPageRepository.findByDocumentIdOrderByPageNumberAsc(docId)).thenReturn(List.of(page1, page2));
 
         List<DocumentPageResponse> result = documentService.getDocumentPages(docId);
@@ -399,6 +406,13 @@ class DocumentServiceTest {
     @DisplayName("getDocumentChunks should return mapped list of DocumentChunkResponse")
     void getDocumentChunksShouldReturnMappedChunks() {
         UUID docId = UUID.randomUUID();
+        UUID userId = UUID.randomUUID();
+        Instant now = Instant.now();
+
+        Document document = new Document(
+                docId, userId, "contract.pdf", "application/pdf",
+                "storage/path/contract.pdf", 2048L, DocumentStatus.READY, now, now
+        );
 
         com.legalassist.entity.DocumentChunk chunk1 = new com.legalassist.entity.DocumentChunk(
                 UUID.randomUUID(), docId, 1, null, null, "Chunk 1 content", 0
@@ -407,7 +421,7 @@ class DocumentServiceTest {
                 UUID.randomUUID(), docId, 1, null, null, "Chunk 2 content", 1
         );
 
-        when(documentRepository.existsById(docId)).thenReturn(true);
+        when(documentRepository.findById(docId)).thenReturn(Optional.of(document));
         when(documentChunkRepository.findByDocumentIdOrderByChunkIndexAsc(docId)).thenReturn(List.of(chunk1, chunk2));
 
         List<com.legalassist.dto.DocumentChunkResponse> result = documentService.getDocumentChunks(docId);
@@ -462,5 +476,134 @@ class DocumentServiceTest {
                 .hasMessageContaining("ready");
 
         verify(embeddingService, never()).generateEmbedding(anyString(), any());
+    }
+
+    @Test
+    @DisplayName("getDocument should throw AccessDeniedException when requesting user does not own document [A]")
+    void getDocumentShouldThrowAccessDeniedForOtherUser() {
+        UUID docId = UUID.randomUUID();
+        UUID ownerId = UUID.randomUUID();
+        UUID attackerId = UUID.randomUUID();
+        Instant now = Instant.now();
+
+        Document doc = new Document(docId, ownerId, "secret.pdf", "application/pdf", "path", 100L, DocumentStatus.READY, now, now);
+        when(documentRepository.findById(docId)).thenReturn(Optional.of(doc));
+
+        assertThatThrownBy(() -> documentService.getDocument(docId, attackerId))
+                .isInstanceOf(com.legalassist.exception.AccessDeniedException.class)
+                .hasMessageContaining("Access denied");
+    }
+
+    @Test
+    @DisplayName("deleteDocument should throw AccessDeniedException when requesting user does not own document [B]")
+    void deleteDocumentShouldThrowAccessDeniedForOtherUser() {
+        UUID docId = UUID.randomUUID();
+        UUID ownerId = UUID.randomUUID();
+        UUID attackerId = UUID.randomUUID();
+        Instant now = Instant.now();
+
+        Document doc = new Document(docId, ownerId, "secret.pdf", "application/pdf", "path", 100L, DocumentStatus.READY, now, now);
+        when(documentRepository.findById(docId)).thenReturn(Optional.of(doc));
+
+        assertThatThrownBy(() -> documentService.deleteDocument(docId, attackerId))
+                .isInstanceOf(com.legalassist.exception.AccessDeniedException.class);
+    }
+
+    @Test
+    @DisplayName("replaceDocument should throw AccessDeniedException when requesting user does not own document [C]")
+    void replaceDocumentShouldThrowAccessDeniedForOtherUser() {
+        UUID docId = UUID.randomUUID();
+        UUID ownerId = UUID.randomUUID();
+        UUID attackerId = UUID.randomUUID();
+        Instant now = Instant.now();
+
+        Document doc = new Document(docId, ownerId, "secret.pdf", "application/pdf", "path", 100L, DocumentStatus.READY, now, now);
+        when(documentRepository.findById(docId)).thenReturn(Optional.of(doc));
+
+        MockMultipartFile pdfFile = new MockMultipartFile("file", "new.pdf", "application/pdf", "%PDF-1.4 sample".getBytes());
+
+        assertThatThrownBy(() -> documentService.replaceDocument(docId, pdfFile, attackerId))
+                .isInstanceOf(com.legalassist.exception.AccessDeniedException.class);
+    }
+
+    @Test
+    @DisplayName("downloadDocumentFile should throw AccessDeniedException when requesting user does not own document [D]")
+    void downloadDocumentFileShouldThrowAccessDeniedForOtherUser() {
+        UUID docId = UUID.randomUUID();
+        UUID ownerId = UUID.randomUUID();
+        UUID attackerId = UUID.randomUUID();
+        Instant now = Instant.now();
+
+        Document doc = new Document(docId, ownerId, "secret.pdf", "application/pdf", "path", 100L, DocumentStatus.READY, now, now);
+        when(documentRepository.findById(docId)).thenReturn(Optional.of(doc));
+
+        assertThatThrownBy(() -> documentService.downloadDocumentFile(docId, attackerId))
+                .isInstanceOf(com.legalassist.exception.AccessDeniedException.class);
+    }
+
+    @Test
+    @DisplayName("getDocumentChunks should throw AccessDeniedException when requesting user does not own document [E]")
+    void getDocumentChunksShouldThrowAccessDeniedForOtherUser() {
+        UUID docId = UUID.randomUUID();
+        UUID ownerId = UUID.randomUUID();
+        UUID attackerId = UUID.randomUUID();
+        Instant now = Instant.now();
+
+        Document doc = new Document(docId, ownerId, "secret.pdf", "application/pdf", "path", 100L, DocumentStatus.READY, now, now);
+        when(documentRepository.findById(docId)).thenReturn(Optional.of(doc));
+
+        assertThatThrownBy(() -> documentService.getDocumentChunks(docId, attackerId))
+                .isInstanceOf(com.legalassist.exception.AccessDeniedException.class);
+    }
+
+    @Test
+    @DisplayName("uploadDocument should reject non-PDF file extension [J]")
+    void uploadDocumentShouldRejectNonPdfExtension() {
+        UUID userId = UUID.randomUUID();
+        MockMultipartFile txtFile = new MockMultipartFile("file", "malicious.exe", "application/pdf", "%PDF-1.4 data".getBytes());
+
+        assertThatThrownBy(() -> documentService.uploadDocument(txtFile, userId))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Only PDF files (.pdf) are allowed");
+    }
+
+    @Test
+    @DisplayName("uploadDocument should reject invalid PDF magic header bytes [K]")
+    void uploadDocumentShouldRejectInvalidMagicHeader() {
+        UUID userId = UUID.randomUUID();
+        MockMultipartFile fakePdf = new MockMultipartFile("file", "fake.pdf", "application/pdf", "NOT_A_PDF_CONTENT".getBytes());
+
+        assertThatThrownBy(() -> documentService.uploadDocument(fakePdf, userId))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("missing %PDF header signature");
+    }
+
+    @Test
+    @DisplayName("uploadDocument should reject file exceeding 20 MB [L]")
+    void uploadDocumentShouldRejectOversizedFile() {
+        UUID userId = UUID.randomUUID();
+        byte[] largeBytes = new byte[21 * 1024 * 1024]; // 21 MB
+        System.arraycopy("%PDF-1.4".getBytes(), 0, largeBytes, 0, 8);
+        MockMultipartFile largeFile = new MockMultipartFile("file", "huge.pdf", "application/pdf", largeBytes);
+
+        assertThatThrownBy(() -> documentService.uploadDocument(largeFile, userId))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("exceeds maximum allowed limit of 20 MB");
+    }
+
+    @Test
+    @DisplayName("uploadDocument should succeed for valid PDF with %PDF header [M]")
+    void uploadDocumentShouldSucceedForValidPdfHeader() {
+        UUID userId = UUID.randomUUID();
+        byte[] validPdfContent = "%PDF-1.4 valid content".getBytes();
+        MockMultipartFile validPdf = new MockMultipartFile("file", "valid.pdf", "application/pdf", validPdfContent);
+
+        when(storageService.uploadFile(anyString(), any(byte[].class), eq("application/pdf"))).thenReturn("path/valid.pdf");
+        when(documentRepository.save(any(Document.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        DocumentResponse response = documentService.uploadDocument(validPdf, userId);
+
+        assertThat(response).isNotNull();
+        assertThat(response.filename()).isEqualTo("valid.pdf");
     }
 }

@@ -50,63 +50,106 @@ public class DocumentController {
     }
 
 
+    private UUID resolveUserId(UUID queryUserId, UUID headerUserId) {
+        org.springframework.security.core.Authentication auth = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+        if (auth != null && auth.isAuthenticated() && auth.getPrincipal() instanceof com.legalassist.security.UserPrincipal principal) {
+            return principal.getId();
+        }
+        return queryUserId != null ? queryUserId : headerUserId;
+    }
+
     @GetMapping("/{id}")
-    public ResponseEntity<DocumentResponse> getDocument(@PathVariable("id") UUID id) {
-        DocumentResponse document = documentService.getDocument(id);
+    public ResponseEntity<DocumentResponse> getDocument(
+            @PathVariable("id") UUID id,
+            @RequestParam(value = "userId", required = false) UUID userId,
+            @org.springframework.web.bind.annotation.RequestHeader(value = "X-User-Id", required = false) UUID headerUserId
+    ) {
+        DocumentResponse document = documentService.getDocument(id, resolveUserId(userId, headerUserId));
         return ResponseEntity.ok(document);
     }
 
     @GetMapping
-    public ResponseEntity<List<DocumentSummaryResponse>> getUserDocuments(@RequestParam("userId") UUID userId) {
-        // Pre-auth contract: userId query parameter is temporary until security context authentication is added.
-        List<DocumentSummaryResponse> documents = documentService.getUserDocuments(userId);
+    public ResponseEntity<List<DocumentSummaryResponse>> getUserDocuments(
+            @RequestParam(value = "userId", required = false) UUID userId,
+            @org.springframework.web.bind.annotation.RequestHeader(value = "X-User-Id", required = false) UUID headerUserId
+    ) {
+        UUID effectiveUserId = resolveUserId(userId, headerUserId);
+        if (effectiveUserId == null) {
+            throw new IllegalArgumentException("userId is required to list documents");
+        }
+        List<DocumentSummaryResponse> documents = documentService.getUserDocuments(effectiveUserId);
         return ResponseEntity.ok(documents);
     }
 
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<DocumentResponse> uploadDocument(
             @RequestParam("file") MultipartFile file,
-            @RequestParam(value = "userId", required = false) UUID userId
+            @RequestParam(value = "userId", required = false) UUID userId,
+            @org.springframework.web.bind.annotation.RequestHeader(value = "X-User-Id", required = false) UUID headerUserId
     ) {
-        DocumentResponse response = documentService.uploadDocument(file, userId);
+        DocumentResponse response = documentService.uploadDocument(file, resolveUserId(userId, headerUserId));
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
     @PostMapping("/{id}/extract")
-    public ResponseEntity<DocumentResponse> extractDocumentText(@PathVariable("id") UUID id) {
-        DocumentResponse response = documentService.extractAndSaveDocumentText(id);
+    public ResponseEntity<DocumentResponse> extractDocumentText(
+            @PathVariable("id") UUID id,
+            @RequestParam(value = "userId", required = false) UUID userId,
+            @org.springframework.web.bind.annotation.RequestHeader(value = "X-User-Id", required = false) UUID headerUserId
+    ) {
+        DocumentResponse response = documentService.extractAndSaveDocumentText(id, resolveUserId(userId, headerUserId));
         return ResponseEntity.ok(response);
     }
 
     @GetMapping("/{id}/pages")
-    public ResponseEntity<List<DocumentPageResponse>> getDocumentPages(@PathVariable("id") UUID id) {
-        List<DocumentPageResponse> pages = documentService.getDocumentPages(id);
+    public ResponseEntity<List<DocumentPageResponse>> getDocumentPages(
+            @PathVariable("id") UUID id,
+            @RequestParam(value = "userId", required = false) UUID userId,
+            @org.springframework.web.bind.annotation.RequestHeader(value = "X-User-Id", required = false) UUID headerUserId
+    ) {
+        List<DocumentPageResponse> pages = documentService.getDocumentPages(id, resolveUserId(userId, headerUserId));
         return ResponseEntity.ok(pages);
     }
 
     @PostMapping("/{id}/chunks")
-    public ResponseEntity<List<DocumentChunkResponse>> chunkDocument(@PathVariable("id") UUID id) {
-        List<DocumentChunkResponse> chunks = documentService.chunkAndSaveDocument(id);
+    public ResponseEntity<List<DocumentChunkResponse>> chunkDocument(
+            @PathVariable("id") UUID id,
+            @RequestParam(value = "userId", required = false) UUID userId,
+            @org.springframework.web.bind.annotation.RequestHeader(value = "X-User-Id", required = false) UUID headerUserId
+    ) {
+        List<DocumentChunkResponse> chunks = documentService.chunkAndSaveDocument(id, resolveUserId(userId, headerUserId));
         return ResponseEntity.ok(chunks);
     }
 
     @GetMapping("/{id}/chunks")
-    public ResponseEntity<List<DocumentChunkResponse>> getDocumentChunks(@PathVariable("id") UUID id) {
-        List<DocumentChunkResponse> chunks = documentService.getDocumentChunks(id);
+    public ResponseEntity<List<DocumentChunkResponse>> getDocumentChunks(
+            @PathVariable("id") UUID id,
+            @RequestParam(value = "userId", required = false) UUID userId,
+            @org.springframework.web.bind.annotation.RequestHeader(value = "X-User-Id", required = false) UUID headerUserId
+    ) {
+        List<DocumentChunkResponse> chunks = documentService.getDocumentChunks(id, resolveUserId(userId, headerUserId));
         return ResponseEntity.ok(chunks);
     }
 
     @PostMapping("/{id}/embeddings")
-    public ResponseEntity<List<DocumentChunkResponse>> generateEmbeddings(@PathVariable("id") UUID id) {
-        List<DocumentChunkResponse> chunks = documentService.generateAndSaveEmbeddings(id);
+    public ResponseEntity<List<DocumentChunkResponse>> generateEmbeddings(
+            @PathVariable("id") UUID id,
+            @RequestParam(value = "userId", required = false) UUID userId,
+            @org.springframework.web.bind.annotation.RequestHeader(value = "X-User-Id", required = false) UUID headerUserId
+    ) {
+        List<DocumentChunkResponse> chunks = documentService.generateAndSaveEmbeddings(id, resolveUserId(userId, headerUserId));
         return ResponseEntity.ok(chunks);
     }
 
     @PostMapping("/{id}/search")
     public ResponseEntity<List<SimilaritySearchResultResponse>> searchSimilarChunks(
             @PathVariable("id") UUID id,
-            @Valid @RequestBody SimilaritySearchRequest request
+            @Valid @RequestBody SimilaritySearchRequest request,
+            @RequestParam(value = "userId", required = false) UUID userId,
+            @org.springframework.web.bind.annotation.RequestHeader(value = "X-User-Id", required = false) UUID headerUserId
     ) {
+        UUID effectiveUserId = resolveUserId(userId, headerUserId);
+        documentService.getDocument(id, effectiveUserId); // Ownership validation gate
         List<SimilaritySearchResultResponse> results = semanticSearchService.searchSimilarChunks(
                 id,
                 request.query(),
@@ -117,33 +160,44 @@ public class DocumentController {
 
     @PostMapping("/ask")
     public ResponseEntity<LegalAnswerResponse> askMultiDocumentQuestion(
-            @Valid @RequestBody LegalAskRequest request
+            @Valid @RequestBody LegalAskRequest request,
+            @RequestParam(value = "userId", required = false) UUID userId,
+            @org.springframework.web.bind.annotation.RequestHeader(value = "X-User-Id", required = false) UUID headerUserId
     ) {
         List<UUID> docIds = request.documentIds();
         if (docIds == null || docIds.isEmpty()) {
             throw new IllegalArgumentException("Please select at least one document before asking a question.");
         }
-        LegalAnswerResponse response = legalQaService.askMultiDocumentQuestion(docIds, request);
+        UUID effectiveUserId = resolveUserId(userId, headerUserId);
+        LegalAnswerResponse response = legalQaService.askMultiDocumentQuestion(docIds, request, effectiveUserId);
         return ResponseEntity.ok(response);
     }
 
     @PostMapping("/{id}/ask")
     public ResponseEntity<LegalAnswerResponse> askQuestion(
             @PathVariable("id") UUID id,
-            @Valid @RequestBody LegalAskRequest request
+            @Valid @RequestBody LegalAskRequest request,
+            @RequestParam(value = "userId", required = false) UUID userId,
+            @org.springframework.web.bind.annotation.RequestHeader(value = "X-User-Id", required = false) UUID headerUserId
     ) {
+        UUID effectiveUserId = resolveUserId(userId, headerUserId);
         if (request.documentIds() != null && !request.documentIds().isEmpty()) {
-            LegalAnswerResponse response = legalQaService.askMultiDocumentQuestion(request.documentIds(), request);
+            LegalAnswerResponse response = legalQaService.askMultiDocumentQuestion(request.documentIds(), request, effectiveUserId);
             return ResponseEntity.ok(response);
         }
-        LegalAnswerResponse response = legalQaService.askQuestion(id, request);
+        LegalAnswerResponse response = legalQaService.askQuestion(id, request, effectiveUserId);
         return ResponseEntity.ok(response);
     }
 
     @GetMapping("/{id}/view")
-    public ResponseEntity<byte[]> viewDocumentFile(@PathVariable("id") UUID id) {
-        DocumentResponse document = documentService.getDocument(id);
-        byte[] pdfBytes = documentService.downloadDocumentFile(id);
+    public ResponseEntity<byte[]> viewDocumentFile(
+            @PathVariable("id") UUID id,
+            @RequestParam(value = "userId", required = false) UUID userId,
+            @org.springframework.web.bind.annotation.RequestHeader(value = "X-User-Id", required = false) UUID headerUserId
+    ) {
+        UUID effectiveUserId = resolveUserId(userId, headerUserId);
+        DocumentResponse document = documentService.getDocument(id, effectiveUserId);
+        byte[] pdfBytes = documentService.downloadDocumentFile(id, effectiveUserId);
 
         String filename = document.filename() != null ? document.filename() : "document.pdf";
         return ResponseEntity.ok()
@@ -153,26 +207,34 @@ public class DocumentController {
     }
 
     @DeleteMapping("/{id}")
-    public ResponseEntity<Void> deleteDocument(@PathVariable("id") UUID id) {
-        documentService.deleteDocument(id);
+    public ResponseEntity<Void> deleteDocument(
+            @PathVariable("id") UUID id,
+            @RequestParam(value = "userId", required = false) UUID userId,
+            @org.springframework.web.bind.annotation.RequestHeader(value = "X-User-Id", required = false) UUID headerUserId
+    ) {
+        documentService.deleteDocument(id, resolveUserId(userId, headerUserId));
         return ResponseEntity.noContent().build();
     }
 
     @PutMapping(value = "/{id}/replace", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<DocumentResponse> replaceDocument(
             @PathVariable("id") UUID id,
-            @RequestParam("file") MultipartFile file
+            @RequestParam("file") MultipartFile file,
+            @RequestParam(value = "userId", required = false) UUID userId,
+            @org.springframework.web.bind.annotation.RequestHeader(value = "X-User-Id", required = false) UUID headerUserId
     ) {
-        DocumentResponse response = documentService.replaceDocument(id, file);
+        DocumentResponse response = documentService.replaceDocument(id, file, resolveUserId(userId, headerUserId));
         return ResponseEntity.ok(response);
     }
 
     @PostMapping(value = "/{id}/replace", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<DocumentResponse> replaceDocumentPost(
             @PathVariable("id") UUID id,
-            @RequestParam("file") MultipartFile file
+            @RequestParam("file") MultipartFile file,
+            @RequestParam(value = "userId", required = false) UUID userId,
+            @org.springframework.web.bind.annotation.RequestHeader(value = "X-User-Id", required = false) UUID headerUserId
     ) {
-        DocumentResponse response = documentService.replaceDocument(id, file);
+        DocumentResponse response = documentService.replaceDocument(id, file, resolveUserId(userId, headerUserId));
         return ResponseEntity.ok(response);
     }
 }
