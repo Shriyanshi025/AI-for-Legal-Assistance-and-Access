@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { documentApi } from '../api/documentApi';
 import { LanguageSelector } from './LanguageSelector';
+import { useAuth } from '../context/AuthContext';
 
 interface NavbarProps {
   isMobileMenuOpen?: boolean;
@@ -8,6 +9,7 @@ interface NavbarProps {
 }
 
 export const Navbar: React.FC<NavbarProps> = ({ isMobileMenuOpen, onToggleMobileMenu }) => {
+  const { user, logout } = useAuth();
   const [publicUserId, setPublicUserId] = useState<string>('USR-LOADING');
 
   useEffect(() => {
@@ -20,14 +22,16 @@ export const Navbar: React.FC<NavbarProps> = ({ isMobileMenuOpen, onToggleMobile
       })
       .catch(() => {
         if (isMounted) {
-          setPublicUserId('USR-DEFAULT');
+          setPublicUserId(user?.publicUserId || 'USR-DEFAULT');
         }
       });
 
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [user]);
+
+  const displayName = user?.name || user?.email || publicUserId;
 
   return (
     <header className="header-card">
@@ -71,13 +75,27 @@ export const Navbar: React.FC<NavbarProps> = ({ isMobileMenuOpen, onToggleMobile
       <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
         <LanguageSelector />
 
-        <div className="user-badge" title="Public User ID for display and sharing">
+        <div className="user-badge" title={user?.email || 'Authenticated User'}>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" />
             <circle cx="12" cy="7" r="4" />
           </svg>
-          <span className="notranslate">User ID: {publicUserId}</span>
+          <span className="notranslate">{displayName}</span>
         </div>
+
+        <button
+          type="button"
+          onClick={() => logout()}
+          className="auth-logout-btn"
+          title="Sign out of Legal Assist"
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+            <polyline points="16 17 21 12 16 7" />
+            <line x1="21" y1="12" x2="9" y2="12" />
+          </svg>
+          <span>Logout</span>
+        </button>
       </div>
     </header>
   );

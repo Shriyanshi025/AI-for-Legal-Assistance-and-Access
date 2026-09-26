@@ -12,21 +12,6 @@ import { API_ROOT_URL } from './config';
 const BASE_URL = `${API_ROOT_URL}/api/documents`;
 const USER_API_URL = `${API_ROOT_URL}/api/users`;
 
-export const DEFAULT_USER_ID = '00000000-0000-0000-0000-000000000001';
-
-export function getDemoUserId(): string {
-  try {
-    const stored = localStorage.getItem('demo_user_id');
-    if (stored && stored.trim().length > 0) {
-      return stored.trim();
-    }
-    localStorage.setItem('demo_user_id', DEFAULT_USER_ID);
-  } catch {
-    // Fallback if localStorage is unavailable
-  }
-  return DEFAULT_USER_ID;
-}
-
 async function handleResponse<T>(response: Response): Promise<T> {
   if (!response.ok) {
     let errorMessage = `HTTP Error ${response.status}: ${response.statusText}`;
@@ -48,28 +33,29 @@ export const documentApi = {
    * Upload a legal PDF document.
    * Endpoint: POST /api/documents
    */
-  async uploadDocument(file: File, userId: string = getDemoUserId()): Promise<DocumentResponse> {
+  async uploadDocument(file: File): Promise<DocumentResponse> {
     const formData = new FormData();
     formData.append('file', file);
-    formData.append('userId', userId);
 
     const response = await fetch(BASE_URL, {
       method: 'POST',
       body: formData,
+      credentials: 'include',
     });
     return handleResponse<DocumentResponse>(response);
   },
 
   /**
-   * List all documents for a user.
-   * Endpoint: GET /api/documents?userId={userId}
+   * List all documents for the authenticated user.
+   * Endpoint: GET /api/documents
    */
-  async getUserDocuments(userId: string = getDemoUserId()): Promise<DocumentSummaryResponse[]> {
-    const response = await fetch(`${BASE_URL}?userId=${encodeURIComponent(userId)}`, {
+  async getUserDocuments(): Promise<DocumentSummaryResponse[]> {
+    const response = await fetch(BASE_URL, {
       method: 'GET',
       headers: {
         'Accept': 'application/json',
       },
+      credentials: 'include',
     });
     return handleResponse<DocumentSummaryResponse[]>(response);
   },
@@ -84,6 +70,7 @@ export const documentApi = {
       headers: {
         'Accept': 'application/json',
       },
+      credentials: 'include',
     });
     return handleResponse<DocumentResponse>(response);
   },
@@ -98,6 +85,7 @@ export const documentApi = {
       headers: {
         'Accept': 'application/json',
       },
+      credentials: 'include',
     });
     return handleResponse<DocumentResponse>(response);
   },
@@ -112,6 +100,7 @@ export const documentApi = {
       headers: {
         'Accept': 'application/json',
       },
+      credentials: 'include',
     });
     return handleResponse<DocumentChunkResponse[]>(response);
   },
@@ -126,6 +115,7 @@ export const documentApi = {
       headers: {
         'Accept': 'application/json',
       },
+      credentials: 'include',
     });
     return handleResponse<DocumentChunkResponse[]>(response);
   },
@@ -166,6 +156,7 @@ export const documentApi = {
         'Content-Type': 'application/json',
         'Accept': 'application/json',
       },
+      credentials: 'include',
       body: JSON.stringify({ question, documentIds: [id] }),
     });
     return handleResponse<LegalAnswerResponse>(response);
@@ -182,6 +173,7 @@ export const documentApi = {
         'Content-Type': 'application/json',
         'Accept': 'application/json',
       },
+      credentials: 'include',
       body: JSON.stringify({ question, documentIds }),
     });
     return handleResponse<LegalAnswerResponse>(response);
@@ -202,6 +194,7 @@ export const documentApi = {
   async deleteDocument(id: string): Promise<void> {
     const response = await fetch(`${BASE_URL}/${id}`, {
       method: 'DELETE',
+      credentials: 'include',
     });
     if (!response.ok) {
       let errorMessage = `Failed to delete document (${response.status})`;
@@ -227,6 +220,7 @@ export const documentApi = {
       headers: {
         'Accept': 'application/json',
       },
+      credentials: 'include',
     });
     return handleResponse<DocumentPageResponse[]>(response);
   },
@@ -242,20 +236,22 @@ export const documentApi = {
     const response = await fetch(`${BASE_URL}/${id}/replace`, {
       method: 'POST',
       body: formData,
+      credentials: 'include',
     });
     return handleResponse<DocumentResponse>(response);
   },
 
   /**
-   * Fetch public user profile (short human-readable public user ID).
-   * Endpoint: GET /api/users/profile?userId={userId}
+   * Fetch public user profile for authenticated user.
+   * Endpoint: GET /api/users/profile
    */
-  async getUserProfile(userId: string = getDemoUserId()): Promise<UserProfileResponse> {
-    const response = await fetch(`${USER_API_URL}/profile?userId=${encodeURIComponent(userId)}`, {
+  async getUserProfile(): Promise<UserProfileResponse> {
+    const response = await fetch(`${USER_API_URL}/profile`, {
       method: 'GET',
       headers: {
         'Accept': 'application/json',
       },
+      credentials: 'include',
     });
     return handleResponse<UserProfileResponse>(response);
   },

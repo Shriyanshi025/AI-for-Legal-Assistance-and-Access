@@ -1,19 +1,16 @@
 import type { LegalResearchRequest, LegalResearchResponse, ResearchSessionSummary } from '../types/research';
-import { getDemoUserId } from './documentApi';
 import { API_ROOT_URL } from './config';
 
 const API_BASE_URL = `${API_ROOT_URL}/api/research`;
 
 export const researchApi = {
   async startResearch(request: LegalResearchRequest): Promise<LegalResearchResponse> {
-    const userId = getDemoUserId();
-    const url = `${API_BASE_URL}?userId=${encodeURIComponent(userId)}`;
-
-    const response = await fetch(url, {
+    const response = await fetch(API_BASE_URL, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
+      credentials: 'include',
       body: JSON.stringify(request),
     });
 
@@ -63,8 +60,13 @@ export const researchApi = {
   },
 
   async getUserResearchSessions(): Promise<ResearchSessionSummary[]> {
-    const userId = getDemoUserId();
-    const response = await fetch(`${API_BASE_URL}/sessions?userId=${encodeURIComponent(userId)}`);
+    const response = await fetch(`${API_BASE_URL}/sessions`, {
+      method: 'GET',
+      headers: {
+        'Accept': 'application/json',
+      },
+      credentials: 'include',
+    });
     if (!response.ok) {
       throw new Error('Failed to fetch research sessions');
     }
@@ -72,8 +74,13 @@ export const researchApi = {
   },
 
   async getResearchSession(id: string): Promise<LegalResearchResponse> {
-    const userId = getDemoUserId();
-    const response = await fetch(`${API_BASE_URL}/sessions/${id}?userId=${encodeURIComponent(userId)}`);
+    const response = await fetch(`${API_BASE_URL}/sessions/${id}`, {
+      method: 'GET',
+      headers: {
+        'Accept': 'application/json',
+      },
+      credentials: 'include',
+    });
     if (!response.ok) {
       throw new Error('Failed to load research session dossier');
     }
@@ -81,12 +88,12 @@ export const researchApi = {
   },
 
   async askFollowUp(sessionId: string, question: string): Promise<import('../types/research').FollowUpResearchResponse> {
-    const userId = getDemoUserId();
-    const response = await fetch(`${API_BASE_URL}/sessions/${sessionId}/followup?userId=${encodeURIComponent(userId)}`, {
+    const response = await fetch(`${API_BASE_URL}/sessions/${sessionId}/followup`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
+      credentials: 'include',
       body: JSON.stringify({ question }),
     });
 
@@ -102,12 +109,12 @@ export const researchApi = {
   },
 
   async renameResearchSession(sessionId: string, title: string): Promise<ResearchSessionSummary> {
-    const userId = getDemoUserId();
-    const response = await fetch(`${API_BASE_URL}/sessions/${sessionId}?userId=${encodeURIComponent(userId)}`, {
+    const response = await fetch(`${API_BASE_URL}/sessions/${sessionId}`, {
       method: 'PATCH',
       headers: {
         'Content-Type': 'application/json',
       },
+      credentials: 'include',
       body: JSON.stringify({ title }),
     });
 
@@ -123,9 +130,9 @@ export const researchApi = {
   },
 
   async deleteResearchSession(sessionId: string): Promise<void> {
-    const userId = getDemoUserId();
-    const response = await fetch(`${API_BASE_URL}/sessions/${sessionId}?userId=${encodeURIComponent(userId)}`, {
+    const response = await fetch(`${API_BASE_URL}/sessions/${sessionId}`, {
       method: 'DELETE',
+      credentials: 'include',
     });
 
     if (!response.ok) {
