@@ -170,16 +170,9 @@ class GeminiGenerationServiceImplTest {
     }
 
     @Test
-    @DisplayName("Test 3: First & Second attempt 503, Third attempt succeeds with fallback model")
+    @DisplayName("Test 3: Both retry attempts on Key 1 fail with 503, throws AiServiceUnavailableException")
     @SuppressWarnings("unchecked")
-    void test3_RetryOn503ThenFallbackModelSucceeds() {
-        String mockModelJson = """
-                {"answer": "Answer generated from fallback model.", "grounded": true, "citations": ["SRC-FALLBACK"]}
-                """;
-        Map<String, Object> mockSuccessResponse = Map.of(
-                "candidates", List.of(Map.of("content", Map.of("parts", List.of(Map.of("text", mockModelJson)))))
-        );
-
+    void test3_RetryOn503Exhausted_ThrowsAiServiceUnavailableException() {
         doReturn(requestBodyUriSpec).when(restClient).post();
         doReturn(requestBodySpec).when(requestBodyUriSpec).uri(any(String.class));
         doReturn(requestBodySpec).when(requestBodySpec).contentType(any());
@@ -188,14 +181,11 @@ class GeminiGenerationServiceImplTest {
 
         when(responseSpec.body(eq(Map.class)))
                 .thenThrow(new RuntimeException("503 Service Unavailable"))
-                .thenThrow(new RuntimeException("503 Service Unavailable"))
-                .thenReturn(mockSuccessResponse);
+                .thenThrow(new RuntimeException("503 Service Unavailable"));
 
-        GeminiGenerationResponse response = generationService.generateAnswer("Sys", "User");
-
-        assertThat(response).isNotNull();
-        assertThat(response.answer()).isEqualTo("Answer generated from fallback model.");
-        assertThat(response.citations()).containsExactly("SRC-FALLBACK");
+        assertThatThrownBy(() -> generationService.generateAnswer("Sys", "User"))
+                .isInstanceOf(com.legalassist.exception.AiServiceUnavailableException.class)
+                .hasMessageContaining("AI service is temporarily unavailable");
     }
 
     @Test

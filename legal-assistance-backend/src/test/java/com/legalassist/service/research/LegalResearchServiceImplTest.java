@@ -175,7 +175,7 @@ class LegalResearchServiceImplTest {
     }
 
     @Test
-    @DisplayName("getResearchSession should throw IllegalArgumentException when session belongs to another user")
+    @DisplayName("getResearchSession should throw AccessDeniedException when session belongs to another user")
     void getResearchSessionAccessDenied() {
         UUID sessionId = UUID.randomUUID();
         UUID otherUser = UUID.randomUUID();
@@ -186,7 +186,7 @@ class LegalResearchServiceImplTest {
         when(researchSessionRepository.findById(sessionId)).thenReturn(Optional.of(session));
 
         assertThatThrownBy(() -> legalResearchService.getResearchSession(sessionId, userId))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(com.legalassist.exception.AccessDeniedException.class)
                 .hasMessageContaining("Access denied");
     }
 }
