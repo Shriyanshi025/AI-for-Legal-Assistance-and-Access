@@ -37,6 +37,10 @@ public class TestErrorController {
 
     @GetMapping("/no-resource")
     public String triggerNoResourceFound() throws org.springframework.web.servlet.resource.NoResourceFoundException {
-        throw new org.springframework.web.servlet.resource.NoResourceFoundException(org.springframework.http.HttpMethod.GET, "/test-errors/no-resource");
+        throw new org.springframework.web.servlet.resource.NoResourceFoundException(
+                org.springframework.http.HttpMethod.GET,
+                "/test-errors/no-resource",
+                "No static resource /test-errors/no-resource."
+        );
     }
 }
