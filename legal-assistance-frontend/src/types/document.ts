@@ -63,6 +63,7 @@ export interface CitationResponse {
   pageNumber: number;
   chunkIndex: number;
   excerpt: string;
+  citationTag?: string;
 }
 
 export interface LegalAnswerResponse {

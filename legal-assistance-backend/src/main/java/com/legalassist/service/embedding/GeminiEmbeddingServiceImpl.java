@@ -43,16 +43,20 @@ public class GeminiEmbeddingServiceImpl implements EmbeddingService {
             throw new IllegalArgumentException("EmbeddingTaskType cannot be null");
         }
 
-        String apiKey = embeddingProperties.getApiKey();
-        if (apiKey == null || apiKey.isBlank()) {
+        String primaryKey = embeddingProperties.getApiKey();
+        if (primaryKey == null || primaryKey.isBlank()) {
             throw new EmbeddingException("Gemini API key is missing. Set GEMINI_API_KEY environment variable.");
+        }
+
+        List<String> keysToTry = new ArrayList<>();
+        keysToTry.add(primaryKey);
+        String secondaryKey = embeddingProperties.getApiKey2();
+        if (secondaryKey != null && !secondaryKey.isBlank() && !secondaryKey.equals(primaryKey)) {
+            keysToTry.add(secondaryKey);
         }
 
         String modelName = embeddingProperties.getModel();
         int expectedDimension = embeddingProperties.getDimension();
-
-        String url = String.format("https://generativelanguage.googleapis.com/v1beta/models/%s:embedContent?key=%s",
-                modelName, apiKey);
 
         Map<String, Object> requestPayload = Map.of(
                 "model", "models/" + modelName,
@@ -63,17 +67,34 @@ public class GeminiEmbeddingServiceImpl implements EmbeddingService {
                 "outputDimensionality", expectedDimension
         );
 
-        Map<?, ?> response;
-        try {
-            response = restClient.post()
-                    .uri(url)
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .body(requestPayload)
-                    .retrieve()
-                    .body(Map.class);
-        } catch (Exception e) {
-            log.error("Failed Gemini API embedding request for text length {}", text.length(), e);
-            throw new EmbeddingException("Failed to generate embedding from Gemini API: " + e.getMessage(), e);
+        Map<?, ?> response = null;
+        Throwable lastException = null;
+
+        for (int keyIdx = 0; keyIdx < keysToTry.size(); keyIdx++) {
+            String apiKey = keysToTry.get(keyIdx);
+            String url = String.format("https://generativelanguage.googleapis.com/v1beta/models/%s:embedContent?key=%s",
+                    modelName, apiKey);
+            try {
+                response = restClient.post()
+                        .uri(url)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .body(requestPayload)
+                        .retrieve()
+                        .body(Map.class);
+                break;
+            } catch (Exception e) {
+                lastException = e;
+                if (keyIdx < keysToTry.size() - 1 && isTemporaryError(e)) {
+                    log.warn("Gemini embedding key #{} encountered quota/transient error. Trying secondary key...", keyIdx + 1);
+                    continue;
+                }
+                log.error("Failed Gemini API embedding request for text length {}", text.length(), e);
+                throw new EmbeddingException("Failed to generate embedding from Gemini API: " + e.getMessage(), e);
+            }
+        }
+
+        if (response == null) {
+            throw new EmbeddingException("Failed to generate embedding from Gemini API across configured keys", lastException);
         }
 
         List<Float> rawValues = extractEmbeddingValues(response, expectedDimension);
@@ -131,5 +152,21 @@ public class GeminiEmbeddingServiceImpl implements EmbeddingService {
         }
 
         return floatValues;
+    }
+
+    private boolean isTemporaryError(Throwable t) {
+        if (t == null) return false;
+        Throwable curr = t;
+        while (curr != null) {
+            String msg = curr.getMessage();
+            if (msg != null) {
+                String lower = msg.toLowerCase();
+                if (lower.contains("429") || lower.contains("503") || lower.contains("resource_exhausted") || lower.contains("quota")) {
+                    return true;
+                }
+            }
+            curr = curr.getCause();
+        }
+        return false;
     }
 }

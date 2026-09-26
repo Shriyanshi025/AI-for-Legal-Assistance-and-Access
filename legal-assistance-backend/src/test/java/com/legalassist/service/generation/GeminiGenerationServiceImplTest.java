@@ -43,7 +43,7 @@ class GeminiGenerationServiceImplTest {
 
     @BeforeEach
     void setUp() {
-        generationProperties = new GenerationProperties("google-gemini", "gemini-3.5-flash", 5, 0.35, 12000, 0.0, "test-api-key");
+        generationProperties = new GenerationProperties("google-gemini", "gemini-3.8-flash", "", 5, 0.35, 12000, 0.0, "test-api-key");
         generationService = new GeminiGenerationServiceImpl(generationProperties, restClient);
     }
 
@@ -116,17 +116,177 @@ class GeminiGenerationServiceImplTest {
     }
 
     @Test
-    @DisplayName("generateAnswer should throw GenerationException on API call failure")
-    void generateAnswerShouldThrowOnApiFailure() {
+    @DisplayName("Test 1: Gemini succeeds on first attempt")
+    @SuppressWarnings("unchecked")
+    void test1_SucceedsOnFirstAttempt() {
+        String mockModelJson = """
+                {"answer": "Termination notice period is 30 days.", "grounded": true, "citations": ["SRC-1", "SRC-2"]}
+                """;
+        Map<String, Object> mockResponse = Map.of(
+                "candidates", List.of(Map.of("content", Map.of("parts", List.of(Map.of("text", mockModelJson)))))
+        );
+
         doReturn(requestBodyUriSpec).when(restClient).post();
         doReturn(requestBodySpec).when(requestBodyUriSpec).uri(any(String.class));
         doReturn(requestBodySpec).when(requestBodySpec).contentType(any());
         doReturn(requestBodySpec).when(requestBodySpec).body(any(Object.class));
         doReturn(responseSpec).when(requestBodySpec).retrieve();
-        when(responseSpec.body(eq(Map.class))).thenThrow(new RuntimeException("Network error"));
+        doReturn(mockResponse).when(responseSpec).body(eq(Map.class));
+
+        GeminiGenerationResponse response = generationService.generateAnswer("System instruction", "User prompt");
+
+        assertThat(response).isNotNull();
+        assertThat(response.answer()).isEqualTo("Termination notice period is 30 days.");
+        assertThat(response.grounded()).isTrue();
+        assertThat(response.citations()).containsExactly("SRC-1", "SRC-2");
+    }
+
+    @Test
+    @DisplayName("Test 2: First attempt 503, second attempt succeeds (retry occurs)")
+    @SuppressWarnings("unchecked")
+    void test2_RetryOn503ThenSucceeds() {
+        String mockModelJson = """
+                {"answer": "Grounded answer after 503 retry.", "grounded": true, "citations": ["SRC-1"]}
+                """;
+        Map<String, Object> mockSuccessResponse = Map.of(
+                "candidates", List.of(Map.of("content", Map.of("parts", List.of(Map.of("text", mockModelJson)))))
+        );
+
+        doReturn(requestBodyUriSpec).when(restClient).post();
+        doReturn(requestBodySpec).when(requestBodyUriSpec).uri(any(String.class));
+        doReturn(requestBodySpec).when(requestBodySpec).contentType(any());
+        doReturn(requestBodySpec).when(requestBodySpec).body(any(Object.class));
+        doReturn(responseSpec).when(requestBodySpec).retrieve();
+
+        when(responseSpec.body(eq(Map.class)))
+                .thenThrow(new RuntimeException("503 Service Unavailable: High demand"))
+                .thenReturn(mockSuccessResponse);
+
+        GeminiGenerationResponse response = generationService.generateAnswer("Sys", "User");
+
+        assertThat(response).isNotNull();
+        assertThat(response.answer()).isEqualTo("Grounded answer after 503 retry.");
+        assertThat(response.citations()).containsExactly("SRC-1");
+    }
+
+    @Test
+    @DisplayName("Test 3: First & Second attempt 503, Third attempt succeeds with fallback model")
+    @SuppressWarnings("unchecked")
+    void test3_RetryOn503ThenFallbackModelSucceeds() {
+        String mockModelJson = """
+                {"answer": "Answer generated from fallback model.", "grounded": true, "citations": ["SRC-FALLBACK"]}
+                """;
+        Map<String, Object> mockSuccessResponse = Map.of(
+                "candidates", List.of(Map.of("content", Map.of("parts", List.of(Map.of("text", mockModelJson)))))
+        );
+
+        doReturn(requestBodyUriSpec).when(restClient).post();
+        doReturn(requestBodySpec).when(requestBodyUriSpec).uri(any(String.class));
+        doReturn(requestBodySpec).when(requestBodySpec).contentType(any());
+        doReturn(requestBodySpec).when(requestBodySpec).body(any(Object.class));
+        doReturn(responseSpec).when(requestBodySpec).retrieve();
+
+        when(responseSpec.body(eq(Map.class)))
+                .thenThrow(new RuntimeException("503 Service Unavailable"))
+                .thenThrow(new RuntimeException("503 Service Unavailable"))
+                .thenReturn(mockSuccessResponse);
+
+        GeminiGenerationResponse response = generationService.generateAnswer("Sys", "User");
+
+        assertThat(response).isNotNull();
+        assertThat(response.answer()).isEqualTo("Answer generated from fallback model.");
+        assertThat(response.citations()).containsExactly("SRC-FALLBACK");
+    }
+
+    @Test
+    @DisplayName("Test 4: 429 Quota Exhaustion on Key 1 rotates to Key 2 and succeeds")
+    @SuppressWarnings("unchecked")
+    void test4_QuotaExhaustionKey1_RotatesToKey2_Succeeds() {
+        GenerationProperties twoKeyProps = new GenerationProperties("google-gemini", "gemini-3.8-flash", "", 5, 0.35, 12000, 0.0, "key1", "key2");
+        GeminiGenerationServiceImpl service = new GeminiGenerationServiceImpl(twoKeyProps, restClient);
+
+        String mockModelJson = """
+                {"answer": "Answer generated using key2 fallback.", "grounded": true, "citations": ["SRC-KEY2"]}
+                """;
+        Map<String, Object> mockSuccessResponse = Map.of(
+                "candidates", List.of(Map.of("content", Map.of("parts", List.of(Map.of("text", mockModelJson)))))
+        );
+
+        doReturn(requestBodyUriSpec).when(restClient).post();
+        doReturn(requestBodySpec).when(requestBodyUriSpec).uri(any(String.class));
+        doReturn(requestBodySpec).when(requestBodySpec).contentType(any());
+        doReturn(requestBodySpec).when(requestBodySpec).body(any(Object.class));
+        doReturn(responseSpec).when(requestBodySpec).retrieve();
+
+        when(responseSpec.body(eq(Map.class)))
+                .thenThrow(new RuntimeException("429 RESOURCE_EXHAUSTED: GenerateRequestsPerDayPerProject-FreeTier"))
+                .thenReturn(mockSuccessResponse);
+
+        GeminiGenerationResponse response = service.generateAnswer("Sys", "User");
+
+        assertThat(response).isNotNull();
+        assertThat(response.answer()).isEqualTo("Answer generated using key2 fallback.");
+        assertThat(response.citations()).containsExactly("SRC-KEY2");
+    }
+
+    @Test
+    @DisplayName("Test 5: Quota Exhaustion on all keys triggers immediate fail-fast without long retries")
+    @SuppressWarnings("unchecked")
+    void test5_QuotaExhaustionAllKeys_FailsFast() {
+        doReturn(requestBodyUriSpec).when(restClient).post();
+        doReturn(requestBodySpec).when(requestBodyUriSpec).uri(any(String.class));
+        doReturn(requestBodySpec).when(requestBodySpec).contentType(any());
+        doReturn(requestBodySpec).when(requestBodySpec).body(any(Object.class));
+        doReturn(responseSpec).when(requestBodySpec).retrieve();
+
+        when(responseSpec.body(eq(Map.class)))
+                .thenThrow(new RuntimeException("429 RESOURCE_EXHAUSTED: GenerateRequestsPerDayPerProject-FreeTier"));
+
+        assertThatThrownBy(() -> generationService.generateAnswer("Sys", "User"))
+                .isInstanceOf(com.legalassist.exception.AiServiceUnavailableException.class)
+                .hasMessageContaining("AI service quota is temporarily unavailable");
+    }
+
+    @Test
+    @DisplayName("Test 6: Non-retryable error (e.g. 400 Bad Request) fails immediately without retrying")
+    @SuppressWarnings("unchecked")
+    void test6_NonRetryableError_FailsImmediately() {
+        doReturn(requestBodyUriSpec).when(restClient).post();
+        doReturn(requestBodySpec).when(requestBodyUriSpec).uri(any(String.class));
+        doReturn(requestBodySpec).when(requestBodySpec).contentType(any());
+        doReturn(requestBodySpec).when(requestBodySpec).body(any(Object.class));
+        doReturn(responseSpec).when(requestBodySpec).retrieve();
+
+        when(responseSpec.body(eq(Map.class)))
+                .thenThrow(new RuntimeException("400 Bad Request: Invalid JSON body"));
 
         assertThatThrownBy(() -> generationService.generateAnswer("Sys", "User"))
                 .isInstanceOf(GenerationException.class)
+                .isNotInstanceOf(com.legalassist.exception.AiServiceUnavailableException.class)
                 .hasMessageContaining("Failed to generate answer");
+    }
+
+    @Test
+    @DisplayName("Test 7: Citation data remains unchanged when generation succeeds")
+    @SuppressWarnings("unchecked")
+    void test7_CitationDataRemainsUnchanged() {
+        String mockModelJson = """
+                {"answer": "Grounded answer text.", "grounded": true, "citations": ["SRC-1", "SRC-2", "SRC-3"]}
+                """;
+        Map<String, Object> mockResponse = Map.of(
+                "candidates", List.of(Map.of("content", Map.of("parts", List.of(Map.of("text", mockModelJson)))))
+        );
+
+        doReturn(requestBodyUriSpec).when(restClient).post();
+        doReturn(requestBodySpec).when(requestBodyUriSpec).uri(any(String.class));
+        doReturn(requestBodySpec).when(requestBodySpec).contentType(any());
+        doReturn(requestBodySpec).when(requestBodySpec).body(any(Object.class));
+        doReturn(responseSpec).when(requestBodySpec).retrieve();
+        doReturn(mockResponse).when(responseSpec).body(eq(Map.class));
+
+        GeminiGenerationResponse response = generationService.generateAnswer("Sys", "User");
+
+        assertThat(response.citations()).hasSize(3);
+        assertThat(response.citations()).containsExactly("SRC-1", "SRC-2", "SRC-3");
     }
 }

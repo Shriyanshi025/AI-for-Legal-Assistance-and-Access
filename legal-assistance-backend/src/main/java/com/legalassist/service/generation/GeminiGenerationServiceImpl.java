@@ -45,15 +45,6 @@ public class GeminiGenerationServiceImpl implements GenerationService {
             throw new IllegalArgumentException("User prompt cannot be null or blank");
         }
 
-        String apiKey = generationProperties.getApiKey();
-        if (apiKey == null || apiKey.isBlank()) {
-            throw new GenerationException("Gemini API key is missing. Set GEMINI_API_KEY environment variable.");
-        }
-
-        String modelName = generationProperties.getGenerationModel();
-        String url = String.format("https://generativelanguage.googleapis.com/v1beta/models/%s:generateContent?key=%s",
-                modelName, apiKey);
-
         Map<String, Object> requestPayload = Map.of(
                 "systemInstruction", Map.of(
                         "parts", List.of(Map.of("text", systemInstruction))
@@ -82,21 +73,217 @@ public class GeminiGenerationServiceImpl implements GenerationService {
                 )
         );
 
-        Map<?, ?> response;
-        try {
-            response = restClient.post()
-                    .uri(url)
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .body(requestPayload)
-                    .retrieve()
-                    .body(Map.class);
-        } catch (Exception e) {
-            log.error("Failed Gemini API generation request for prompt length {}", userPrompt.length(), e);
-            throw new GenerationException("Failed to generate answer from Gemini API: " + e.getMessage(), e);
+        Map<?, ?> responseMap = executeWithQuotaAwarePolicy(requestPayload);
+        String jsonText = extractResponseText(responseMap);
+        return parseGenerationResponse(jsonText);
+    }
+
+    @Override
+    public String generateRawContent(String systemInstruction, String userPrompt) {
+        if (systemInstruction == null || systemInstruction.isBlank()) {
+            throw new IllegalArgumentException("System instruction cannot be null or blank");
+        }
+        if (userPrompt == null || userPrompt.isBlank()) {
+            throw new IllegalArgumentException("User prompt cannot be null or blank");
         }
 
-        String jsonText = extractResponseText(response);
-        return parseGenerationResponse(jsonText);
+        Map<String, Object> requestPayload = Map.of(
+                "systemInstruction", Map.of(
+                        "parts", List.of(Map.of("text", systemInstruction))
+                ),
+                "contents", List.of(
+                        Map.of(
+                                "role", "user",
+                                "parts", List.of(Map.of("text", userPrompt))
+                        )
+                ),
+                "generationConfig", Map.of(
+                        "temperature", generationProperties.getTemperature(),
+                        "responseMimeType", "application/json"
+                )
+        );
+
+        Map<?, ?> responseMap = executeWithQuotaAwarePolicy(requestPayload);
+        return extractResponseText(responseMap);
+    }
+
+    private Map<?, ?> executeWithQuotaAwarePolicy(Map<String, Object> requestPayload) {
+        String primaryKey = generationProperties.getApiKey();
+        if (primaryKey == null || primaryKey.isBlank()) {
+            throw new GenerationException("Gemini API key is missing. Set GEMINI_API_KEY environment variable.");
+        }
+
+        List<String> keysToTry = new ArrayList<>();
+        keysToTry.add(primaryKey);
+
+        String secondaryKey = generationProperties.getApiKey2();
+        if (secondaryKey != null && !secondaryKey.isBlank() && !secondaryKey.equals(primaryKey)) {
+            keysToTry.add(secondaryKey);
+        }
+
+        String modelName = generationProperties.getGenerationModel();
+        Throwable lastQuotaException = null;
+        Throwable lastTransientException = null;
+
+        for (int keyIdx = 0; keyIdx < keysToTry.size(); keyIdx++) {
+            String apiKey = keysToTry.get(keyIdx);
+            int maxAttemptsForKey = 2;
+
+            for (int attempt = 1; attempt <= maxAttemptsForKey; attempt++) {
+                try {
+                    String url = String.format("https://generativelanguage.googleapis.com/v1beta/models/%s:generateContent?key=%s",
+                            modelName, apiKey);
+
+                    log.info("Executing Gemini generation (key {}/{}, attempt {}/{}) with model '{}'",
+                            keyIdx + 1, keysToTry.size(), attempt, maxAttemptsForKey, modelName);
+
+                    Map<?, ?> response = restClient.post()
+                            .uri(url)
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .body(requestPayload)
+                            .retrieve()
+                            .body(Map.class);
+
+                    if (keyIdx > 0 || attempt > 1) {
+                        log.info("Gemini generation succeeded on key {} attempt {}", keyIdx + 1, attempt);
+                    }
+                    return response;
+                } catch (Exception e) {
+                    if (isQuotaExhausted(e)) {
+                        lastQuotaException = e;
+                        log.warn("Gemini API key #{} encountered quota exhaustion (429/RESOURCE_EXHAUSTED).", keyIdx + 1);
+                        break;
+                    } else if (isTransientServiceError(e)) {
+                        lastTransientException = e;
+                        if (attempt < maxAttemptsForKey) {
+                            long backoffMs = 500L * attempt;
+                            log.warn("Transient 503/network error on key #{} attempt {}/{}. Retrying in {}ms...",
+                                    keyIdx + 1, attempt, maxAttemptsForKey, backoffMs);
+                            try {
+                                Thread.sleep(backoffMs);
+                            } catch (InterruptedException ie) {
+                                Thread.currentThread().interrupt();
+                                throw new GenerationException("Interrupted during Gemini retry backoff", ie);
+                            }
+                        }
+                    } else {
+                        log.error("Non-retryable Gemini API generation error: {}", e.getMessage());
+                        throw new GenerationException("Failed to generate answer from Gemini API: " + e.getMessage(), e);
+                    }
+                }
+            }
+        }
+
+        if (lastQuotaException != null) {
+            log.error("Gemini API quota is exhausted across all {} configured key(s). Fail fast triggered.", keysToTry.size());
+            throw new com.legalassist.exception.AiServiceUnavailableException("AI service quota is temporarily unavailable. Please try again later.", lastQuotaException);
+        }
+
+        log.error("Gemini API generation failed after retries due to temporary service unavailability.");
+        throw new com.legalassist.exception.AiServiceUnavailableException("AI service is temporarily unavailable. Please try again later.", lastTransientException);
+    }
+
+    public static boolean isQuotaExhausted(Throwable t) {
+        if (t == null) return false;
+        Throwable curr = t;
+        while (curr != null) {
+            if (curr instanceof org.springframework.web.client.HttpStatusCodeException scEx) {
+                if (scEx.getStatusCode().value() == 429) {
+                    return true;
+                }
+            }
+            if (curr instanceof org.springframework.web.client.RestClientResponseException rcrEx) {
+                if (rcrEx.getStatusCode().value() == 429) {
+                    return true;
+                }
+            }
+            String msg = curr.getMessage();
+            if (msg != null) {
+                String lower = msg.toLowerCase();
+                if (lower.contains("429") ||
+                    lower.contains("resource_exhausted") ||
+                    lower.contains("resourceexhausted") ||
+                    lower.contains("generaterequestsperdayperproject") ||
+                    lower.contains("free_tier_requests") ||
+                    lower.contains("quota exceeded") ||
+                    lower.contains("quota_exceeded") ||
+                    lower.contains("rate limit")) {
+                    return true;
+                }
+            }
+            curr = curr.getCause();
+        }
+        return false;
+    }
+
+    public static boolean isTransientServiceError(Throwable t) {
+        if (t == null) return false;
+        Throwable curr = t;
+        while (curr != null) {
+            if (curr instanceof org.springframework.web.client.HttpStatusCodeException scEx) {
+                int code = scEx.getStatusCode().value();
+                if (code == 503 || code == 502 || code == 504) {
+                    return true;
+                }
+            }
+            if (curr instanceof org.springframework.web.client.RestClientResponseException rcrEx) {
+                int code = rcrEx.getStatusCode().value();
+                if (code == 503 || code == 502 || code == 504) {
+                    return true;
+                }
+            }
+            if (curr instanceof java.net.SocketTimeoutException || curr instanceof java.io.IOException) {
+                return true;
+            }
+            String msg = curr.getMessage();
+            if (msg != null) {
+                String lower = msg.toLowerCase();
+                if (lower.contains("503") ||
+                    lower.contains("502") ||
+                    lower.contains("504") ||
+                    lower.contains("service unavailable") ||
+                    lower.contains("high demand") ||
+                    lower.contains("temporarily unavailable") ||
+                    lower.contains("connection timed out") ||
+                    lower.contains("read timed out")) {
+                    return true;
+                }
+            }
+            curr = curr.getCause();
+        }
+        return false;
+    }
+
+    public static boolean isTemporaryAvailabilityError(Throwable t) {
+        return isQuotaExhausted(t) || isTransientServiceError(t);
+    }
+
+    public static long extractRetryDelayMs(Throwable t, long defaultBackoffMs) {
+        if (t == null) return defaultBackoffMs;
+
+        Throwable curr = t;
+        while (curr != null) {
+            String msg = curr.getMessage();
+            if (msg != null) {
+                java.util.regex.Matcher matcher1 = java.util.regex.Pattern.compile("\"retryDelay\":\\s*\"(\\d+)(?:\\.\\d+)?s\"").matcher(msg);
+                if (matcher1.find()) {
+                    try {
+                        long seconds = Long.parseLong(matcher1.group(1));
+                        return Math.min((seconds + 1) * 1000L, 30000L);
+                    } catch (NumberFormatException ignored) {}
+                }
+
+                java.util.regex.Matcher matcher2 = java.util.regex.Pattern.compile("[Pp]lease retry in (\\d+)(?:\\.\\d+)?s").matcher(msg);
+                if (matcher2.find()) {
+                    try {
+                        long seconds = Long.parseLong(matcher2.group(1));
+                        return Math.min((seconds + 1) * 1000L, 30000L);
+                    } catch (NumberFormatException ignored) {}
+                }
+            }
+            curr = curr.getCause();
+        }
+        return defaultBackoffMs;
     }
 
     @SuppressWarnings("unchecked")

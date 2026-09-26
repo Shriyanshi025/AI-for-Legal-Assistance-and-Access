@@ -3,7 +3,6 @@ package com.legalassist.service.embedding;
 import com.legalassist.exception.EmbeddingException;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 
 public final class VectorUtils {

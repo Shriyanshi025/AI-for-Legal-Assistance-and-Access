@@ -9,31 +9,49 @@ import org.springframework.stereotype.Component;
 public class GenerationProperties {
 
     private String generationProvider = "google-gemini";
-    private String generationModel = "gemini-3.5-flash";
+    private String generationModel = "gemini-3.8-flash";
+    private String fallbackModel = "";
     private int topK = 5;
-
-
-
-
 
     private double minSimilarity = 0.35;
     private int maxContextChars = 12000;
     private double temperature = 0.0;
 
-    @Value("${gemini.api.key:}")
+    @Value("${app.rag.api-key:${gemini.api.key:${GEMINI_API_KEY:}}}")
     private String apiKey;
+
+    @Value("${app.rag.api-key2:${gemini.api.key2:${GEMINI_API_KEY_2:}}}")
+    private String apiKey2;
 
     public GenerationProperties() {
     }
 
     public GenerationProperties(String generationProvider, String generationModel, int topK, double minSimilarity, int maxContextChars, double temperature, String apiKey) {
+        this(generationProvider, generationModel, "", topK, minSimilarity, maxContextChars, temperature, apiKey, "");
+    }
+
+    public GenerationProperties(String generationProvider, String generationModel, String fallbackModel, int topK, double minSimilarity, int maxContextChars, double temperature, String apiKey) {
+        this(generationProvider, generationModel, fallbackModel, topK, minSimilarity, maxContextChars, temperature, apiKey, "");
+    }
+
+    public GenerationProperties(String generationProvider, String generationModel, String fallbackModel, int topK, double minSimilarity, int maxContextChars, double temperature, String apiKey, String apiKey2) {
         this.generationProvider = generationProvider;
         this.generationModel = generationModel;
+        this.fallbackModel = fallbackModel;
         this.topK = topK;
         this.minSimilarity = minSimilarity;
         this.maxContextChars = maxContextChars;
         this.temperature = temperature;
         this.apiKey = apiKey;
+        this.apiKey2 = apiKey2;
+    }
+
+    public String getFallbackModel() {
+        return fallbackModel;
+    }
+
+    public void setFallbackModel(String fallbackModel) {
+        this.fallbackModel = fallbackModel;
     }
 
     public String getGenerationProvider() {
@@ -90,5 +108,13 @@ public class GenerationProperties {
 
     public void setApiKey(String apiKey) {
         this.apiKey = apiKey;
+    }
+
+    public String getApiKey2() {
+        return apiKey2;
+    }
+
+    public void setApiKey2(String apiKey2) {
+        this.apiKey2 = apiKey2;
     }
 }

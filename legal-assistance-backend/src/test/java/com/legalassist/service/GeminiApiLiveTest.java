@@ -55,7 +55,7 @@ class GeminiApiLiveTest {
         EmbeddingProperties embProps = new EmbeddingProperties("google-gemini", "gemini-embedding-001", 768, apiKey);
         embeddingService = new GeminiEmbeddingServiceImpl(embProps);
 
-        GenerationProperties genProps = new GenerationProperties("google-gemini", "gemini-3.5-flash", 5, 0.35, 12000, 0.0, apiKey);
+        GenerationProperties genProps = new GenerationProperties("google-gemini", "gemini-3.8-flash", 5, 0.35, 12000, 0.0, apiKey);
         generationService = new GeminiGenerationServiceImpl(genProps);
     }
 

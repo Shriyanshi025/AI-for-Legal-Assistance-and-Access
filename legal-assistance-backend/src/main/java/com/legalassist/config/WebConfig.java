@@ -18,7 +18,16 @@ public class WebConfig implements WebMvcConfigurer {
 
     @org.springframework.context.annotation.Bean
     public org.springframework.web.client.RestClient.Builder restClientBuilder() {
-        return org.springframework.web.client.RestClient.builder();
+        org.springframework.http.client.SimpleClientHttpRequestFactory factory = new org.springframework.http.client.SimpleClientHttpRequestFactory();
+        factory.setConnectTimeout(10000);
+        factory.setReadTimeout(60000);
+        return org.springframework.web.client.RestClient.builder().requestFactory(factory);
+    }
+
+    @org.springframework.context.annotation.Bean
+    public com.fasterxml.jackson.databind.ObjectMapper objectMapper() {
+        return new com.fasterxml.jackson.databind.ObjectMapper()
+                .registerModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule());
     }
 
 }

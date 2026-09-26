@@ -12,17 +12,25 @@ public class EmbeddingProperties {
     private String model = "gemini-embedding-001";
     private int dimension = 768;
 
-    @Value("${gemini.api.key:}")
+    @Value("${app.embedding.api-key:${gemini.api.key:${GEMINI_API_KEY:}}}")
     private String apiKey;
+
+    @Value("${app.embedding.api-key2:${gemini.api.key2:${GEMINI_API_KEY_2:}}}")
+    private String apiKey2;
 
     public EmbeddingProperties() {
     }
 
     public EmbeddingProperties(String provider, String model, int dimension, String apiKey) {
+        this(provider, model, dimension, apiKey, "");
+    }
+
+    public EmbeddingProperties(String provider, String model, int dimension, String apiKey, String apiKey2) {
         this.provider = provider;
         this.model = model;
         this.dimension = dimension;
         this.apiKey = apiKey;
+        this.apiKey2 = apiKey2;
     }
 
     public String getProvider() {
@@ -55,5 +63,13 @@ public class EmbeddingProperties {
 
     public void setApiKey(String apiKey) {
         this.apiKey = apiKey;
+    }
+
+    public String getApiKey2() {
+        return apiKey2;
+    }
+
+    public void setApiKey2(String apiKey2) {
+        this.apiKey2 = apiKey2;
     }
 }

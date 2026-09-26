@@ -160,8 +160,37 @@ export const LegalQaPanel: React.FC<LegalQaPanelProps> = ({
         </button>
 
         {error && (
-          <div style={{ color: 'var(--status-failed-text)', fontSize: '0.78rem', marginTop: '4px', fontWeight: 500 }}>
-            ⚠️ {error}
+          <div style={{
+            background: 'var(--status-failed-bg)',
+            border: '1px solid rgba(239, 68, 68, 0.3)',
+            borderRadius: '12px',
+            padding: '12px 16px',
+            marginTop: '10px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '8px'
+          }}>
+            <div style={{ color: 'var(--status-failed-text)', fontSize: '0.82rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '6px', lineHeight: '1.4' }}>
+              <span>⚠️</span>
+              <span>{error}</span>
+            </div>
+            {(error.toLowerCase().includes('temporarily unavailable') || error.toLowerCase().includes('high demand') || error.toLowerCase().includes('503') || error.toLowerCase().includes('service unavailable')) && (
+              <button
+                type="button"
+                className="ask-btn"
+                style={{
+                  width: 'auto',
+                  alignSelf: 'flex-start',
+                  padding: '6px 16px',
+                  fontSize: '0.78rem',
+                  marginTop: '4px'
+                }}
+                onClick={handleSubmit}
+                disabled={isLoading}
+              >
+                🔄 Try Again
+              </button>
+            )}
           </div>
         )}
       </form>

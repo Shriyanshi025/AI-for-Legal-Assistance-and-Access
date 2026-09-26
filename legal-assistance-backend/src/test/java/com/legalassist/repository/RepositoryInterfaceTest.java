@@ -1,8 +1,5 @@
 package com.legalassist.repository;
 
-import com.legalassist.entity.Document;
-import com.legalassist.entity.DocumentChunk;
-import com.legalassist.entity.DocumentPage;
 import com.legalassist.entity.DocumentStatus;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

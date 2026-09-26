@@ -6,6 +6,7 @@ import { DocumentUpload } from '../components/DocumentUpload';
 import { DocumentList } from '../components/DocumentList';
 import { PipelineControl } from '../components/PipelineControl';
 import { LegalQaPanel } from '../components/LegalQaPanel';
+import { LegalResearchPanel } from '../components/LegalResearchPanel';
 import { CitationViewerModal } from '../components/CitationViewerModal';
 
 export const DocumentManager: React.FC = () => {
@@ -16,6 +17,18 @@ export const DocumentManager: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
 
   const [activeCitation, setActiveCitation] = useState<CitationResponse | null>(null);
+  const [activeTab, setActiveTab] = useState<'documents' | 'assistant' | 'research'>('documents');
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState<boolean>(false);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isMobileMenuOpen) {
+        setIsMobileMenuOpen(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isMobileMenuOpen]);
 
   const fetchDocuments = async () => {
     setIsLoading(true);
@@ -158,19 +171,10 @@ export const DocumentManager: React.FC = () => {
 
   const activeDocument = selectedDoc;
 
-  const [activeView, setActiveView] = useState<'manager' | 'assistant'>('manager');
-
-  const handleSelectAssistant = () => {
-    setActiveView('assistant');
-    const textarea = document.getElementById('legal-qa-textarea');
-    if (textarea) {
-      textarea.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      (textarea as HTMLTextAreaElement).focus();
-    }
-  };
-
-  const handleSelectManager = () => {
-    setActiveView('manager');
+  const handleSelectTab = (tab: 'documents' | 'assistant' | 'research') => {
+    setActiveTab(tab);
+    setActiveCitation(null);
+    setIsMobileMenuOpen(false);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -190,18 +194,28 @@ export const DocumentManager: React.FC = () => {
 
   return (
     <div className="dashboard-container">
-      {/* Top Header Card matching reference image */}
-      <Navbar />
+      {/* Fixed Top Header Navbar */}
+      <Navbar
+        isMobileMenuOpen={isMobileMenuOpen}
+        onToggleMobileMenu={() => setIsMobileMenuOpen((prev) => !prev)}
+      />
 
-      {/* 3-Column Dashboard Body */}
+      {/* Mobile Sidebar Backdrop Overlay */}
+      <div
+        className={`sidebar-backdrop ${isMobileMenuOpen ? 'active' : ''}`}
+        onClick={() => setIsMobileMenuOpen(false)}
+        aria-hidden="true"
+      />
+
+      {/* Dashboard Body Shell */}
       <div className="dashboard-body">
-        {/* Column 1: Left Navigation & Justice Scale Illustration */}
-        <aside className="sidebar-panel">
+        {/* Single Fixed Left Navigation Sidebar */}
+        <aside className={`sidebar-panel ${isMobileMenuOpen ? 'mobile-open' : ''}`}>
           <nav className="sidebar-nav">
             <div
-              className={`nav-item ${activeView === 'manager' ? 'active' : ''}`}
-              onClick={handleSelectManager}
-              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleSelectManager(); }}
+              className={`nav-item ${activeTab === 'documents' ? 'active' : ''}`}
+              onClick={() => handleSelectTab('documents')}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleSelectTab('documents'); }}
               role="button"
               tabIndex={0}
               aria-label="Document Manager View"
@@ -214,9 +228,9 @@ export const DocumentManager: React.FC = () => {
             </div>
 
             <div
-              className={`nav-item ${activeView === 'assistant' ? 'active' : ''}`}
-              onClick={handleSelectAssistant}
-              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleSelectAssistant(); }}
+              className={`nav-item ${activeTab === 'assistant' ? 'active' : ''}`}
+              onClick={() => handleSelectTab('assistant')}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleSelectTab('assistant'); }}
               role="button"
               tabIndex={0}
               aria-label="Legal Assistant View"
@@ -225,6 +239,23 @@ export const DocumentManager: React.FC = () => {
                 <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
               </svg>
               <span>Legal Assistant</span>
+            </div>
+
+            <div
+              className={`nav-item ${activeTab === 'research' ? 'active' : ''}`}
+              onClick={() => handleSelectTab('research')}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleSelectTab('research'); }}
+              role="button"
+              tabIndex={0}
+              aria-label="Legal Research Workspace View"
+            >
+              <svg className="nav-item-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                <polyline points="14 2 14 8 20 8" />
+                <line x1="16" y1="13" x2="8" y2="13" />
+                <line x1="16" y1="17" x2="8" y2="17" />
+              </svg>
+              <span>Legal Research</span>
             </div>
           </nav>
 
@@ -238,7 +269,6 @@ export const DocumentManager: React.FC = () => {
               <span>AI-Powered Legal Assistance</span>
             </div>
 
-            {/* LOWER-LEFT CORNER: Plain Milky White Container with Justice Scale PNG */}
             <div className="justice-scale-container">
               <img
                 src="/Justice%20logo.png"
@@ -249,7 +279,7 @@ export const DocumentManager: React.FC = () => {
           </div>
         </aside>
 
-        {/* Column 2: Central Main Workspace */}
+        {/* Main Tab-Based Workspace */}
         <main className="main-workspace">
           {error && (
             <div className="content-card" style={{ borderLeft: '4px solid var(--status-failed-text)', color: 'var(--status-failed-text)', fontSize: '0.85rem' }}>
@@ -257,32 +287,57 @@ export const DocumentManager: React.FC = () => {
             </div>
           )}
 
-          {/* Section 1: Upload Your Legal Document */}
-          <DocumentUpload onUploadSuccess={handleUploadSuccess} />
+          {activeTab === 'documents' ? (
+            <>
+              {/* Section 1: Upload Your Legal Document */}
+              <DocumentUpload onUploadSuccess={handleUploadSuccess} />
 
-          {/* Section 2: Your Documents Table */}
-          <DocumentList
-            documents={documents}
-            selectedDocumentId={activeDocument?.id || null}
-            selectedDocIds={selectedDocIds}
-            onSelectDocument={setSelectedDoc}
-            onToggleSelectDocument={handleToggleSelectDocument}
-            onToggleSelectAll={handleToggleSelectAll}
-            onViewDocument={handleViewDocument}
-            onReplaceDocument={handleReplaceDocument}
-            onDeleteDocument={handleDeleteDocument}
-            isLoading={isLoading}
-            isProcessingAction={isProcessingAction}
-          />
+              {/* Section 2: Your Documents Table */}
+              <DocumentList
+                documents={documents}
+                selectedDocumentId={activeDocument?.id || null}
+                selectedDocIds={selectedDocIds}
+                onSelectDocument={setSelectedDoc}
+                onToggleSelectDocument={handleToggleSelectDocument}
+                onToggleSelectAll={handleToggleSelectAll}
+                onViewDocument={handleViewDocument}
+                onReplaceDocument={handleReplaceDocument}
+                onDeleteDocument={handleDeleteDocument}
+                isLoading={isLoading}
+                isProcessingAction={isProcessingAction}
+              />
 
-          {/* Section 3: Processing Pipeline */}
-          <PipelineControl
-            document={activeDocument}
-            onStatusUpdated={handleStatusUpdated}
-          />
+              {/* Section 3: Processing Pipeline */}
+              <PipelineControl
+                document={activeDocument}
+                onStatusUpdated={handleStatusUpdated}
+                onPrepareDocument={() => setActiveTab('assistant')}
+              />
+            </>
+          ) : activeTab === 'assistant' ? (
+            <>
+              {/* Legal Assistant Workspace */}
+              <LegalQaPanel
+                document={activeDocument}
+                documentsList={documents}
+                selectedDocIds={selectedDocIds}
+                onSelectDocument={setSelectedDoc}
+                onSelectCitation={handleSelectCitation}
+              />
+            </>
+          ) : (
+            <>
+              {/* Legal Research Workspace */}
+              <LegalResearchPanel
+                documentsList={documents}
+                selectedDocIds={selectedDocIds}
+                onNavigateToUpload={() => handleSelectTab('documents')}
+              />
+            </>
+          )}
 
-          {/* Section 4: Main Workspace Citation Source & PDF Viewer */}
-          {activeCitation && citationTargetDocId && (
+          {/* Citation Source & PDF Viewer for Legal Assistant Workspace */}
+          {activeTab === 'assistant' && activeCitation && citationTargetDocId && (
             <div id="main-workspace-source-viewer" style={{ width: '100%', marginTop: '18px' }}>
               <CitationViewerModal
                 documentId={citationTargetDocId}
@@ -293,17 +348,6 @@ export const DocumentManager: React.FC = () => {
             </div>
           )}
         </main>
-
-        {/* Column 3: Right Legal Q&A Panel */}
-        <aside className="qa-workspace">
-          <LegalQaPanel
-            document={activeDocument}
-            documentsList={documents}
-            selectedDocIds={selectedDocIds}
-            onSelectDocument={setSelectedDoc}
-            onSelectCitation={handleSelectCitation}
-          />
-        </aside>
       </div>
     </div>
   );

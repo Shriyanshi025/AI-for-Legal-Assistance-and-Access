@@ -5,9 +5,10 @@ import type { DocumentSummaryResponse, DocumentResponse } from '../types/documen
 interface PipelineControlProps {
   document: DocumentSummaryResponse | DocumentResponse | null;
   onStatusUpdated: (updatedDoc: DocumentResponse) => void;
+  onPrepareDocument?: () => void;
 }
 
-export const PipelineControl: React.FC<PipelineControlProps> = ({ document, onStatusUpdated }) => {
+export const PipelineControl: React.FC<PipelineControlProps> = ({ document, onStatusUpdated, onPrepareDocument }) => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [stepText, setStepText] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
@@ -18,6 +19,10 @@ export const PipelineControl: React.FC<PipelineControlProps> = ({ document, onSt
     if (!document) return;
     setError(null);
     setIsProcessing(true);
+
+    if (onPrepareDocument) {
+      onPrepareDocument();
+    }
 
     try {
       const updatedDoc = await documentApi.prepareDocument(document.id, (step) => {
