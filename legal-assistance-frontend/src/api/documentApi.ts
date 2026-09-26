@@ -7,9 +7,10 @@ import type {
   UserProfileResponse,
   ApiErrorResponse
 } from '../types/document';
+import { API_ROOT_URL } from './config';
 
-const BASE_URL = 'http://localhost:8080/api/documents';
-const USER_API_URL = 'http://localhost:8080/api/users';
+const BASE_URL = `${API_ROOT_URL}/api/documents`;
+const USER_API_URL = `${API_ROOT_URL}/api/users`;
 
 export const DEFAULT_USER_ID = '00000000-0000-0000-0000-000000000001';
 

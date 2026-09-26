@@ -57,7 +57,7 @@ export const DocumentManager: React.FC = () => {
         setSelectedDocIds(new Set());
       }
     } catch (err: any) {
-      setError(err.message || 'Failed to connect to backend server. Make sure Spring Boot is running on port 8080.');
+      setError(err.message || 'Failed to connect to backend server. Please verify backend service availability.');
     } finally {
       setIsLoading(false);
     }

@@ -1,7 +1,8 @@
 import type { LegalResearchRequest, LegalResearchResponse, ResearchSessionSummary } from '../types/research';
 import { getDemoUserId } from './documentApi';
+import { API_ROOT_URL } from './config';
 
-const API_BASE_URL = 'http://localhost:8080/api/research';
+const API_BASE_URL = `${API_ROOT_URL}/api/research`;
 
 export const researchApi = {
   async startResearch(request: LegalResearchRequest): Promise<LegalResearchResponse> {
