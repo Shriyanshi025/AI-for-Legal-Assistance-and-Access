@@ -3,9 +3,10 @@ import { useAuth } from '../context/AuthContext';
 
 interface RegisterPageProps {
   onSwitchToLogin: () => void;
+  onNavigateToLanding?: () => void;
 }
 
-export const RegisterPage: React.FC<RegisterPageProps> = ({ onSwitchToLogin }) => {
+export const RegisterPage: React.FC<RegisterPageProps> = ({ onSwitchToLogin, onNavigateToLanding }) => {
   const { register } = useAuth();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -50,15 +51,22 @@ export const RegisterPage: React.FC<RegisterPageProps> = ({ onSwitchToLogin }) =
     <div className="auth-page-container">
       <div className="auth-card">
         <div className="auth-header">
-          <div className="auth-logo-box">
-            <img
-              src="/Justice%20logo.png"
-              alt="Legal Assist Logo"
-              className="auth-justice-logo"
-            />
-          </div>
-          <h1 className="auth-title">Create Account</h1>
-          <p className="auth-subtitle">Join Legal Assist AI Platform</p>
+          <button
+            type="button"
+            className="auth-brand-btn"
+            onClick={onNavigateToLanding}
+            title="Return to Legal Assist Landing Page"
+          >
+            <div className="auth-logo-box">
+              <img
+                src="/Justice%20logo.png"
+                alt="Legal Assist Logo"
+                className="auth-justice-logo"
+              />
+            </div>
+            <h1 className="auth-title">Create Account</h1>
+            <p className="auth-subtitle">Join Legal Assist AI Platform</p>
+          </button>
         </div>
 
         {error && (

@@ -9,7 +9,11 @@ import { LegalQaPanel } from '../components/LegalQaPanel';
 import { LegalResearchPanel } from '../components/LegalResearchPanel';
 import { CitationViewerModal } from '../components/CitationViewerModal';
 
-export const DocumentManager: React.FC = () => {
+interface DocumentManagerProps {
+  onNavigateToLanding?: () => void;
+}
+
+export const DocumentManager: React.FC<DocumentManagerProps> = ({ onNavigateToLanding }) => {
   const [documents, setDocuments] = useState<DocumentSummaryResponse[]>([]);
   const [selectedDoc, setSelectedDoc] = useState<DocumentSummaryResponse | DocumentResponse | null>(null);
   const [selectedDocIds, setSelectedDocIds] = useState<Set<string>>(new Set());
@@ -198,6 +202,7 @@ export const DocumentManager: React.FC = () => {
       <Navbar
         isMobileMenuOpen={isMobileMenuOpen}
         onToggleMobileMenu={() => setIsMobileMenuOpen((prev) => !prev)}
+        onNavigateToLanding={onNavigateToLanding}
       />
 
       {/* Mobile Sidebar Backdrop Overlay */}

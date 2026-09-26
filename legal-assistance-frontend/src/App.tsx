@@ -1,12 +1,15 @@
 import React, { useState } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { LandingPage } from './views/LandingPage';
 import { LoginPage } from './views/LoginPage';
 import { RegisterPage } from './views/RegisterPage';
 import { DocumentManager } from './views/DocumentManager';
 
+type AppView = 'landing' | 'login' | 'register' | 'dashboard';
+
 const AppRoutes: React.FC = () => {
   const { isAuthenticated, loading } = useAuth();
-  const [authView, setAuthView] = useState<'login' | 'register'>('login');
+  const [view, setView] = useState<AppView>('landing');
 
   if (loading) {
     return (
@@ -24,14 +27,33 @@ const AppRoutes: React.FC = () => {
     );
   }
 
+  // Handle views for authenticated vs unauthenticated states
   if (!isAuthenticated) {
-    if (authView === 'register') {
-      return <RegisterPage onSwitchToLogin={() => setAuthView('login')} />;
+    if (view === 'login') {
+      return (
+        <LoginPage
+          onSwitchToRegister={() => setView('register')}
+          onNavigateToLanding={() => setView('landing')}
+        />
+      );
     }
-    return <LoginPage onSwitchToRegister={() => setAuthView('register')} />;
+    if (view === 'register') {
+      return (
+        <RegisterPage
+          onSwitchToLogin={() => setView('login')}
+          onNavigateToLanding={() => setView('landing')}
+        />
+      );
+    }
+    return <LandingPage onNavigate={(targetView) => setView(targetView)} />;
   }
 
-  return <DocumentManager />;
+  // Authenticated state
+  if (view === 'landing') {
+    return <LandingPage onNavigate={(targetView) => setView(targetView)} />;
+  }
+
+  return <DocumentManager onNavigateToLanding={() => setView('landing')} />;
 };
 
 export const App: React.FC = () => {

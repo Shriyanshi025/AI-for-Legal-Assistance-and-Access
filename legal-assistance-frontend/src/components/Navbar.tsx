@@ -6,13 +6,19 @@ import { useAuth } from '../context/AuthContext';
 interface NavbarProps {
   isMobileMenuOpen?: boolean;
   onToggleMobileMenu?: () => void;
+  onNavigateToLanding?: () => void;
 }
 
-export const Navbar: React.FC<NavbarProps> = ({ isMobileMenuOpen, onToggleMobileMenu }) => {
+export const Navbar: React.FC<NavbarProps> = ({ isMobileMenuOpen, onToggleMobileMenu, onNavigateToLanding }) => {
   const { user, logout } = useAuth();
-  const [publicUserId, setPublicUserId] = useState<string>('USR-LOADING');
+  const [publicUserId, setPublicUserId] = useState<string>(user?.publicUserId || 'USR-LOADING');
 
   useEffect(() => {
+    if (user?.publicUserId) {
+      setPublicUserId(user.publicUserId);
+      return;
+    }
+
     let isMounted = true;
     documentApi.getUserProfile()
       .then((profile) => {
@@ -35,7 +41,7 @@ export const Navbar: React.FC<NavbarProps> = ({ isMobileMenuOpen, onToggleMobile
 
   return (
     <header className="header-card">
-      <div className="header-brand">
+      <div className="header-brand-container">
         {onToggleMobileMenu && (
           <button
             type="button"
@@ -59,17 +65,24 @@ export const Navbar: React.FC<NavbarProps> = ({ isMobileMenuOpen, onToggleMobile
           </button>
         )}
 
-        <div className="brand-icon-box">
-          <img
-            src="/Justice%20logo.png"
-            alt="Legal Assist Logo"
-            className="brand-justice-logo"
-          />
-        </div>
-        <div className="brand-text-group">
-          <span className="brand-title">Legal Assist</span>
-          <span className="brand-tagline">Your Legal AI Companion</span>
-        </div>
+        <button
+          type="button"
+          className="header-brand-clickable"
+          onClick={onNavigateToLanding}
+          title="Return to Legal Assist Landing Page"
+        >
+          <div className="brand-icon-box">
+            <img
+              src="/Justice%20logo.png"
+              alt="Legal Assist Logo"
+              className="brand-justice-logo"
+            />
+          </div>
+          <div className="brand-text-group">
+            <span className="brand-title">Legal Assist</span>
+            <span className="brand-tagline">Your Legal AI Companion</span>
+          </div>
+        </button>
       </div>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
