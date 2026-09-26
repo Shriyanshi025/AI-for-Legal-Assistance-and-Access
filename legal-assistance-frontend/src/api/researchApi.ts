@@ -1,5 +1,5 @@
 import type { LegalResearchRequest, LegalResearchResponse, ResearchSessionSummary } from '../types/research';
-import { API_ROOT_URL } from './config';
+import { API_ROOT_URL, withCsrfHeaders } from './config';
 
 const API_BASE_URL = `${API_ROOT_URL}/api/research`;
 
@@ -7,9 +7,9 @@ export const researchApi = {
   async startResearch(request: LegalResearchRequest): Promise<LegalResearchResponse> {
     const response = await fetch(API_BASE_URL, {
       method: 'POST',
-      headers: {
+      headers: withCsrfHeaders({
         'Content-Type': 'application/json',
-      },
+      }),
       credentials: 'include',
       body: JSON.stringify(request),
     });
@@ -90,9 +90,9 @@ export const researchApi = {
   async askFollowUp(sessionId: string, question: string): Promise<import('../types/research').FollowUpResearchResponse> {
     const response = await fetch(`${API_BASE_URL}/sessions/${sessionId}/followup`, {
       method: 'POST',
-      headers: {
+      headers: withCsrfHeaders({
         'Content-Type': 'application/json',
-      },
+      }),
       credentials: 'include',
       body: JSON.stringify({ question }),
     });
@@ -111,9 +111,9 @@ export const researchApi = {
   async renameResearchSession(sessionId: string, title: string): Promise<ResearchSessionSummary> {
     const response = await fetch(`${API_BASE_URL}/sessions/${sessionId}`, {
       method: 'PATCH',
-      headers: {
+      headers: withCsrfHeaders({
         'Content-Type': 'application/json',
-      },
+      }),
       credentials: 'include',
       body: JSON.stringify({ title }),
     });
@@ -132,6 +132,7 @@ export const researchApi = {
   async deleteResearchSession(sessionId: string): Promise<void> {
     const response = await fetch(`${API_BASE_URL}/sessions/${sessionId}`, {
       method: 'DELETE',
+      headers: withCsrfHeaders(),
       credentials: 'include',
     });
 

@@ -8,12 +8,14 @@ import { PipelineControl } from '../components/PipelineControl';
 import { LegalQaPanel } from '../components/LegalQaPanel';
 import { LegalResearchPanel } from '../components/LegalResearchPanel';
 import { CitationViewerModal } from '../components/CitationViewerModal';
+import { useAuth } from '../context/AuthContext';
 
 interface DocumentManagerProps {
   onNavigateToLanding?: () => void;
 }
 
 export const DocumentManager: React.FC<DocumentManagerProps> = ({ onNavigateToLanding }) => {
+  const { isAuthenticated, loading: authLoading } = useAuth();
   const [documents, setDocuments] = useState<DocumentSummaryResponse[]>([]);
   const [selectedDoc, setSelectedDoc] = useState<DocumentSummaryResponse | DocumentResponse | null>(null);
   const [selectedDocIds, setSelectedDocIds] = useState<Set<string>>(new Set());
@@ -68,8 +70,10 @@ export const DocumentManager: React.FC<DocumentManagerProps> = ({ onNavigateToLa
   };
 
   useEffect(() => {
-    fetchDocuments();
-  }, []);
+    if (!authLoading && isAuthenticated) {
+      fetchDocuments();
+    }
+  }, [authLoading, isAuthenticated]);
 
   const handleToggleSelectDocument = (id: string) => {
     setSelectedDocIds((prev) => {

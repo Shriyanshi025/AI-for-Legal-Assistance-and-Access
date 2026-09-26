@@ -8,6 +8,7 @@ import type {
   ResearchConflict,
   EvidenceGap,
 } from '../types/research';
+import { useAuth } from '../context/AuthContext';
 
 interface LegalResearchPanelProps {
   documentsList: DocumentSummaryResponse[];
@@ -102,6 +103,7 @@ export const LegalResearchPanel: React.FC<LegalResearchPanelProps> = ({
 
   const [followUpAnswers, setFollowUpAnswers] = useState<Array<{ question: string; answer: string; citations: any[] }>>([]);
   const [activeFollowUpQuestion, setActiveFollowUpQuestion] = useState<string | null>(null);
+  const { isAuthenticated, loading: authLoading } = useAuth();
   const [customFollowUp, setCustomFollowUp] = useState<string>('');
 
   const fetchSessions = async () => {
@@ -114,8 +116,10 @@ export const LegalResearchPanel: React.FC<LegalResearchPanelProps> = ({
   };
 
   useEffect(() => {
-    fetchSessions();
-  }, []);
+    if (!authLoading && isAuthenticated) {
+      fetchSessions();
+    }
+  }, [authLoading, isAuthenticated]);
 
   const selectedDocsArray = documentsList.filter((d) => selectedDocIds.has(d.id));
 

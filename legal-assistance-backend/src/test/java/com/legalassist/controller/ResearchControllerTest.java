@@ -4,8 +4,10 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.legalassist.dto.research.LegalResearchRequest;
 import com.legalassist.dto.research.LegalResearchResponse;
 import com.legalassist.entity.User;
+import com.legalassist.security.UserPrincipal;
 import com.legalassist.service.UserService;
 import com.legalassist.service.research.LegalResearchService;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -13,6 +15,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.http.MediaType;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -50,8 +54,24 @@ class ResearchControllerTest {
     void setUp() {
         userId = UUID.randomUUID();
         docId = UUID.randomUUID();
-        User defaultUser = new User(userId, "USR-TEST12", java.time.Instant.now());
-        when(userService.getOrCreateUser(any())).thenReturn(defaultUser);
+
+        User user = new User();
+        user.setId(userId);
+        user.setPublicUserId("USR-TEST12");
+        user.setEmail("user@example.com");
+        user.setPasswordHash("hashed_password");
+        user.setEnabled(true);
+
+        UserPrincipal principal = UserPrincipal.create(user);
+        UsernamePasswordAuthenticationToken auth = new UsernamePasswordAuthenticationToken(
+                principal, null, principal.getAuthorities()
+        );
+        SecurityContextHolder.getContext().setAuthentication(auth);
+    }
+
+    @AfterEach
+    void tearDown() {
+        SecurityContextHolder.clearContext();
     }
 
     @Test
@@ -78,7 +98,6 @@ class ResearchControllerTest {
         when(legalResearchService.executeResearch(eq(userId), any(LegalResearchRequest.class))).thenReturn(mockResponse);
 
         mockMvc.perform(post("/api/research")
-                        .param("userId", userId.toString())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isOk())
@@ -91,8 +110,7 @@ class ResearchControllerTest {
     void getResearchSessionsSuccess() throws Exception {
         when(legalResearchService.getUserResearchSessions(userId)).thenReturn(List.of());
 
-        mockMvc.perform(get("/api/research/sessions")
-                        .param("userId", userId.toString()))
+        mockMvc.perform(get("/api/research/sessions"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$").isArray());
     }
@@ -113,7 +131,6 @@ class ResearchControllerTest {
         when(legalResearchService.executeFollowUp(eq(sessionId), eq(userId), any())).thenReturn(response);
 
         mockMvc.perform(post("/api/research/sessions/" + sessionId + "/followup")
-                        .param("userId", userId.toString())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isOk())
@@ -136,7 +153,6 @@ class ResearchControllerTest {
         when(legalResearchService.renameResearchSession(eq(sessionId), eq(userId), any())).thenReturn(response);
 
         mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch("/api/research/sessions/" + sessionId)
-                        .param("userId", userId.toString())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isOk())
@@ -148,8 +164,19 @@ class ResearchControllerTest {
     void deleteResearchSessionSuccess() throws Exception {
         UUID sessionId = UUID.randomUUID();
 
-        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete("/api/research/sessions/" + sessionId)
-                        .param("userId", userId.toString()))
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete("/api/research/sessions/" + sessionId))
                 .andExpect(status().isNoContent());
+    }
+
+    @Test
+    @DisplayName("Unauthenticated request to /api/research should return 401 Unauthorized")
+    void unauthenticatedResearchFails() throws Exception {
+        SecurityContextHolder.clearContext();
+        LegalResearchRequest request = new LegalResearchRequest("Notice period requirement?", List.of(docId), "Comprehensive", "US", null);
+
+        mockMvc.perform(post("/api/research")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isUnauthorized());
     }
 }

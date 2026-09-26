@@ -221,7 +221,7 @@ public class DocumentServiceImpl implements DocumentService {
         }
 
         if (extractionResult.hasExtractableText()) {
-            document.setStatus(DocumentStatus.READY);
+            document.setStatus(DocumentStatus.PROCESSING);
         } else {
             // Scanned / image-only PDF with no machine readable text
             document.setStatus(DocumentStatus.FAILED);
@@ -261,7 +261,7 @@ public class DocumentServiceImpl implements DocumentService {
                 .orElseThrow(() -> new DocumentNotFoundException(documentId));
         validateDocumentOwnership(document, userId);
 
-        if (document.getStatus() != DocumentStatus.READY) {
+        if (document.getStatus() != DocumentStatus.PROCESSING && document.getStatus() != DocumentStatus.READY) {
             throw new IllegalStateException("Document is not ready for chunking. Current status: " + document.getStatus());
         }
 
@@ -334,7 +334,7 @@ public class DocumentServiceImpl implements DocumentService {
                 .orElseThrow(() -> new DocumentNotFoundException(documentId));
         validateDocumentOwnership(document, userId);
 
-        if (document.getStatus() != DocumentStatus.READY) {
+        if (document.getStatus() != DocumentStatus.PROCESSING && document.getStatus() != DocumentStatus.READY) {
             throw new IllegalStateException("Document is not ready for embedding generation. Current status: " + document.getStatus());
         }
 
@@ -344,22 +344,33 @@ public class DocumentServiceImpl implements DocumentService {
         }
 
         log.info("Generating embeddings for {} chunks of document {}", chunks.size(), documentId);
-        for (DocumentChunk chunk : chunks) {
-            List<Float> vector = embeddingService.generateEmbedding(
-                    chunk.getContent(),
-                    com.legalassist.service.embedding.EmbeddingTaskType.RETRIEVAL_DOCUMENT
-            );
-            String formattedVector = com.legalassist.service.embedding.VectorUtils.formatPgVector(vector);
-            chunk.setEmbedding(formattedVector);
-            try {
-                documentChunkRepository.updateEmbedding(chunk.getId(), formattedVector);
-            } catch (Exception e) {
-                log.debug("Native pgvector update fallback to JPA entity state for chunk {}: {}", chunk.getId(), e.getMessage());
+        try {
+            for (DocumentChunk chunk : chunks) {
+                List<Float> vector = embeddingService.generateEmbedding(
+                        chunk.getContent(),
+                        com.legalassist.service.embedding.EmbeddingTaskType.RETRIEVAL_DOCUMENT
+                );
+                String formattedVector = com.legalassist.service.embedding.VectorUtils.formatPgVector(vector);
+                chunk.setEmbedding(formattedVector);
+                try {
+                    documentChunkRepository.updateEmbedding(chunk.getId(), formattedVector);
+                } catch (Exception e) {
+                    log.debug("Native pgvector update fallback to JPA entity state for chunk {}: {}", chunk.getId(), e.getMessage());
+                }
             }
-        }
 
-        documentChunkRepository.saveAll(chunks);
-        log.info("Successfully persisted embeddings for {} chunks of document {}", chunks.size(), documentId);
+            documentChunkRepository.saveAll(chunks);
+            document.setStatus(DocumentStatus.READY);
+            document.setUpdatedAt(Instant.now());
+            documentRepository.save(document);
+            log.info("Successfully persisted embeddings and set status READY for {} chunks of document {}", chunks.size(), documentId);
+        } catch (Exception e) {
+            document.setStatus(DocumentStatus.FAILED);
+            document.setUpdatedAt(Instant.now());
+            documentRepository.save(document);
+            log.error("Failed to generate or persist embeddings for document {}", documentId, e);
+            throw e;
+        }
 
         return chunks.stream()
                 .map(documentMapper::toDocumentChunkResponse)

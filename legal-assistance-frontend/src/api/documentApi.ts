@@ -7,7 +7,7 @@ import type {
   UserProfileResponse,
   ApiErrorResponse
 } from '../types/document';
-import { API_ROOT_URL } from './config';
+import { API_ROOT_URL, withCsrfHeaders } from './config';
 
 const BASE_URL = `${API_ROOT_URL}/api/documents`;
 const USER_API_URL = `${API_ROOT_URL}/api/users`;
@@ -39,6 +39,7 @@ export const documentApi = {
 
     const response = await fetch(BASE_URL, {
       method: 'POST',
+      headers: withCsrfHeaders(),
       body: formData,
       credentials: 'include',
     });
@@ -82,9 +83,9 @@ export const documentApi = {
   async extractText(id: string): Promise<DocumentResponse> {
     const response = await fetch(`${BASE_URL}/${id}/extract`, {
       method: 'POST',
-      headers: {
+      headers: withCsrfHeaders({
         'Accept': 'application/json',
-      },
+      }),
       credentials: 'include',
     });
     return handleResponse<DocumentResponse>(response);
@@ -97,9 +98,9 @@ export const documentApi = {
   async chunkDocument(id: string): Promise<DocumentChunkResponse[]> {
     const response = await fetch(`${BASE_URL}/${id}/chunks`, {
       method: 'POST',
-      headers: {
+      headers: withCsrfHeaders({
         'Accept': 'application/json',
-      },
+      }),
       credentials: 'include',
     });
     return handleResponse<DocumentChunkResponse[]>(response);
@@ -112,9 +113,9 @@ export const documentApi = {
   async generateEmbeddings(id: string): Promise<DocumentChunkResponse[]> {
     const response = await fetch(`${BASE_URL}/${id}/embeddings`, {
       method: 'POST',
-      headers: {
+      headers: withCsrfHeaders({
         'Accept': 'application/json',
-      },
+      }),
       credentials: 'include',
     });
     return handleResponse<DocumentChunkResponse[]>(response);
@@ -152,10 +153,10 @@ export const documentApi = {
   async askQuestion(id: string, question: string): Promise<LegalAnswerResponse> {
     const response = await fetch(`${BASE_URL}/${id}/ask`, {
       method: 'POST',
-      headers: {
+      headers: withCsrfHeaders({
         'Content-Type': 'application/json',
         'Accept': 'application/json',
-      },
+      }),
       credentials: 'include',
       body: JSON.stringify({ question, documentIds: [id] }),
     });
@@ -169,10 +170,10 @@ export const documentApi = {
   async askMultiDocumentQuestion(documentIds: string[], question: string): Promise<LegalAnswerResponse> {
     const response = await fetch(`${BASE_URL}/ask`, {
       method: 'POST',
-      headers: {
+      headers: withCsrfHeaders({
         'Content-Type': 'application/json',
         'Accept': 'application/json',
-      },
+      }),
       credentials: 'include',
       body: JSON.stringify({ question, documentIds }),
     });
@@ -194,6 +195,7 @@ export const documentApi = {
   async deleteDocument(id: string): Promise<void> {
     const response = await fetch(`${BASE_URL}/${id}`, {
       method: 'DELETE',
+      headers: withCsrfHeaders(),
       credentials: 'include',
     });
     if (!response.ok) {
@@ -235,6 +237,7 @@ export const documentApi = {
 
     const response = await fetch(`${BASE_URL}/${id}/replace`, {
       method: 'POST',
+      headers: withCsrfHeaders(),
       body: formData,
       credentials: 'include',
     });

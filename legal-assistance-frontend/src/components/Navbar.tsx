@@ -14,7 +14,11 @@ export const Navbar: React.FC<NavbarProps> = ({ isMobileMenuOpen, onToggleMobile
   const [publicUserId, setPublicUserId] = useState<string>(user?.publicUserId || 'USR-LOADING');
 
   useEffect(() => {
-    if (user?.publicUserId) {
+    if (!user) {
+      setPublicUserId('USR-DEFAULT');
+      return;
+    }
+    if (user.publicUserId) {
       setPublicUserId(user.publicUserId);
       return;
     }

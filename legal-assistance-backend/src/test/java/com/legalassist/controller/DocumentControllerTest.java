@@ -4,11 +4,15 @@ import com.legalassist.dto.DocumentPageResponse;
 import com.legalassist.dto.DocumentResponse;
 import com.legalassist.dto.DocumentSummaryResponse;
 import com.legalassist.entity.DocumentStatus;
+import com.legalassist.entity.User;
 import com.legalassist.exception.DocumentNotFoundException;
 import com.legalassist.exception.GlobalExceptionHandler;
 import com.legalassist.exception.PdfExtractionException;
 import com.legalassist.exception.StorageException;
+import com.legalassist.security.UserPrincipal;
 import com.legalassist.service.DocumentService;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -16,6 +20,8 @@ import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockMultipartFile;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -50,6 +56,29 @@ class DocumentControllerTest {
     @MockitoBean
     private com.legalassist.service.rag.LegalQaService legalQaService;
 
+    private UUID userId;
+
+    @BeforeEach
+    void setUp() {
+        userId = UUID.randomUUID();
+        User user = new User();
+        user.setId(userId);
+        user.setPublicUserId("USR-DOCUSER1");
+        user.setEmail("docuser@example.com");
+        user.setPasswordHash("hashed_password");
+        user.setEnabled(true);
+
+        UserPrincipal principal = UserPrincipal.create(user);
+        UsernamePasswordAuthenticationToken auth = new UsernamePasswordAuthenticationToken(
+                principal, null, principal.getAuthorities()
+        );
+        SecurityContextHolder.getContext().setAuthentication(auth);
+    }
+
+    @AfterEach
+    void tearDown() {
+        SecurityContextHolder.clearContext();
+    }
 
     @Test
     @DisplayName("GET /api/documents/{id} should return 200 and DocumentResponse when document exists")
@@ -68,7 +97,7 @@ class DocumentControllerTest {
                 updatedAt
         );
 
-        when(documentService.getDocument(eq(docId), any())).thenReturn(response);
+        when(documentService.getDocument(eq(docId), eq(userId))).thenReturn(response);
 
         mockMvc.perform(get("/api/documents/{id}", docId)
                         .accept(MediaType.APPLICATION_JSON))
@@ -83,14 +112,14 @@ class DocumentControllerTest {
                 .andExpect(jsonPath("$.userId").doesNotExist())
                 .andExpect(jsonPath("$.storagePath").doesNotExist());
 
-        verify(documentService).getDocument(eq(docId), any());
+        verify(documentService).getDocument(eq(docId), eq(userId));
     }
 
     @Test
     @DisplayName("GET /api/documents/{id} should return 404 ApiErrorResponse when document does not exist")
     void getDocumentByIdShouldReturn404WhenNotFound() throws Exception {
         UUID missingId = UUID.randomUUID();
-        when(documentService.getDocument(eq(missingId), any())).thenThrow(new DocumentNotFoundException(missingId));
+        when(documentService.getDocument(eq(missingId), eq(userId))).thenThrow(new DocumentNotFoundException(missingId));
 
         mockMvc.perform(get("/api/documents/{id}", missingId)
                         .accept(MediaType.APPLICATION_JSON))
@@ -100,13 +129,12 @@ class DocumentControllerTest {
                 .andExpect(jsonPath("$.message").value("Document not found with id: " + missingId))
                 .andExpect(jsonPath("$.path").value("/api/documents/" + missingId));
 
-        verify(documentService).getDocument(eq(missingId), any());
+        verify(documentService).getDocument(eq(missingId), eq(userId));
     }
 
     @Test
-    @DisplayName("GET /api/documents?userId={userId} should return 200 and list of DocumentSummaryResponse")
+    @DisplayName("GET /api/documents should return 200 and list of DocumentSummaryResponse for authenticated user")
     void getUserDocumentsShouldReturnDocumentSummaryList() throws Exception {
-        UUID userId = UUID.randomUUID();
         UUID doc1Id = UUID.randomUUID();
         UUID doc2Id = UUID.randomUUID();
         Instant createdAt = Instant.parse("2026-09-20T10:00:00Z");
@@ -131,7 +159,6 @@ class DocumentControllerTest {
         when(documentService.getUserDocuments(userId)).thenReturn(List.of(doc1, doc2));
 
         mockMvc.perform(get("/api/documents")
-                        .param("userId", userId.toString())
                         .accept(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.length()").value(2))
@@ -146,13 +173,11 @@ class DocumentControllerTest {
     }
 
     @Test
-    @DisplayName("GET /api/documents?userId={userId} should return 200 and empty list when user has no documents")
+    @DisplayName("GET /api/documents should return 200 and empty list when authenticated user has no documents")
     void getUserDocumentsShouldReturnEmptyListWhenNoDocumentsFound() throws Exception {
-        UUID userId = UUID.randomUUID();
         when(documentService.getUserDocuments(userId)).thenReturn(Collections.emptyList());
 
         mockMvc.perform(get("/api/documents")
-                        .param("userId", userId.toString())
                         .accept(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.length()").value(0));
@@ -169,18 +194,8 @@ class DocumentControllerTest {
     }
 
     @Test
-    @DisplayName("GET /api/documents?userId={userId} with invalid UUID syntax should return non-200 status")
-    void getUserDocumentsWithInvalidUuidShouldReturnError() throws Exception {
-        mockMvc.perform(get("/api/documents")
-                        .param("userId", "not-a-valid-uuid")
-                        .accept(MediaType.APPLICATION_JSON))
-                .andExpect(status().is4xxClientError());
-    }
-
-    @Test
     @DisplayName("POST /api/documents should return 201 Created and DocumentResponse when upload succeeds")
     void uploadDocumentShouldReturn201CreatedOnSuccess() throws Exception {
-        UUID userId = UUID.randomUUID();
         UUID docId = UUID.randomUUID();
         Instant now = Instant.now();
 
@@ -204,8 +219,7 @@ class DocumentControllerTest {
         when(documentService.uploadDocument(any(), eq(userId))).thenReturn(response);
 
         mockMvc.perform(multipart("/api/documents")
-                        .file(file)
-                        .param("userId", userId.toString()))
+                        .file(file))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.id").value(docId.toString()))
                 .andExpect(jsonPath("$.filename").value("contract.pdf"))
@@ -215,15 +229,13 @@ class DocumentControllerTest {
     @Test
     @DisplayName("POST /api/documents should return 400 Bad Request when file upload fails validation")
     void uploadDocumentShouldReturn400WhenFileIsEmpty() throws Exception {
-        UUID userId = UUID.randomUUID();
         MockMultipartFile emptyFile = new MockMultipartFile("file", "empty.pdf", "application/pdf", new byte[0]);
 
         when(documentService.uploadDocument(any(), eq(userId)))
                 .thenThrow(new IllegalArgumentException("Document file must be provided and non-empty"));
 
         mockMvc.perform(multipart("/api/documents")
-                        .file(emptyFile)
-                        .param("userId", userId.toString()))
+                        .file(emptyFile))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.status").value(400))
                 .andExpect(jsonPath("$.error").value("Bad Request"))
@@ -233,15 +245,13 @@ class DocumentControllerTest {
     @Test
     @DisplayName("POST /api/documents should return 500 Internal Server Error when storage upload fails")
     void uploadDocumentShouldReturn500WhenStorageFails() throws Exception {
-        UUID userId = UUID.randomUUID();
         MockMultipartFile file = new MockMultipartFile("file", "doc.pdf", "application/pdf", "%PDF-1.4 data".getBytes());
 
         when(documentService.uploadDocument(any(), eq(userId)))
                 .thenThrow(new StorageException("Storage error"));
 
         mockMvc.perform(multipart("/api/documents")
-                        .file(file)
-                        .param("userId", userId.toString()))
+                        .file(file))
                 .andExpect(status().isInternalServerError())
                 .andExpect(jsonPath("$.status").value(500))
                 .andExpect(jsonPath("$.error").value("Internal Server Error"))
@@ -264,7 +274,7 @@ class DocumentControllerTest {
                 now
         );
 
-        when(documentService.extractAndSaveDocumentText(eq(docId), any())).thenReturn(response);
+        when(documentService.extractAndSaveDocumentText(eq(docId), eq(userId))).thenReturn(response);
 
         mockMvc.perform(post("/api/documents/{id}/extract", docId)
                         .accept(MediaType.APPLICATION_JSON))
@@ -272,14 +282,14 @@ class DocumentControllerTest {
                 .andExpect(jsonPath("$.id").value(docId.toString()))
                 .andExpect(jsonPath("$.status").value("READY"));
 
-        verify(documentService).extractAndSaveDocumentText(eq(docId), any());
+        verify(documentService).extractAndSaveDocumentText(eq(docId), eq(userId));
     }
 
     @Test
     @DisplayName("POST /api/documents/{id}/extract should return 400 Bad Request on PdfExtractionException")
     void extractDocumentTextShouldReturn400OnExtractionFailure() throws Exception {
         UUID docId = UUID.randomUUID();
-        when(documentService.extractAndSaveDocumentText(eq(docId), any()))
+        when(documentService.extractAndSaveDocumentText(eq(docId), eq(userId)))
                 .thenThrow(new PdfExtractionException("Document is not a valid PDF file"));
 
         mockMvc.perform(post("/api/documents/{id}/extract", docId)
@@ -298,7 +308,7 @@ class DocumentControllerTest {
         DocumentPageResponse page1 = new DocumentPageResponse(UUID.randomUUID(), docId, 1, "Page 1 text", now);
         DocumentPageResponse page2 = new DocumentPageResponse(UUID.randomUUID(), docId, 2, "Page 2 text", now);
 
-        when(documentService.getDocumentPages(eq(docId), any())).thenReturn(List.of(page1, page2));
+        when(documentService.getDocumentPages(eq(docId), eq(userId))).thenReturn(List.of(page1, page2));
 
         mockMvc.perform(get("/api/documents/{id}/pages", docId)
                         .accept(MediaType.APPLICATION_JSON))
@@ -309,7 +319,7 @@ class DocumentControllerTest {
                 .andExpect(jsonPath("$[1].pageNumber").value(2))
                 .andExpect(jsonPath("$[1].content").value("Page 2 text"));
 
-        verify(documentService).getDocumentPages(eq(docId), any());
+        verify(documentService).getDocumentPages(eq(docId), eq(userId));
     }
 
     @Test
@@ -321,7 +331,7 @@ class DocumentControllerTest {
                 UUID.randomUUID(), docId, 1, null, null, "Chunk 1 content", 0
         );
 
-        when(documentService.chunkAndSaveDocument(eq(docId), any())).thenReturn(List.of(chunk1));
+        when(documentService.chunkAndSaveDocument(eq(docId), eq(userId))).thenReturn(List.of(chunk1));
 
         mockMvc.perform(post("/api/documents/{id}/chunks", docId)
                         .accept(MediaType.APPLICATION_JSON))
@@ -329,14 +339,14 @@ class DocumentControllerTest {
                 .andExpect(jsonPath("$.length()").value(1))
                 .andExpect(jsonPath("$[0].content").value("Chunk 1 content"));
 
-        verify(documentService).chunkAndSaveDocument(eq(docId), any());
+        verify(documentService).chunkAndSaveDocument(eq(docId), eq(userId));
     }
 
     @Test
     @DisplayName("POST /api/documents/{id}/chunks should return 400 Bad Request on ChunkingException")
     void chunkDocumentShouldReturn400OnChunkingException() throws Exception {
         UUID docId = UUID.randomUUID();
-        when(documentService.chunkAndSaveDocument(eq(docId), any()))
+        when(documentService.chunkAndSaveDocument(eq(docId), eq(userId)))
                 .thenThrow(new com.legalassist.exception.ChunkingException("Document contains no text content to chunk"));
 
         mockMvc.perform(post("/api/documents/{id}/chunks", docId)
@@ -358,7 +368,7 @@ class DocumentControllerTest {
                 UUID.randomUUID(), docId, 1, null, null, "Chunk 2 content", 1
         );
 
-        when(documentService.getDocumentChunks(eq(docId), any())).thenReturn(List.of(chunk1, chunk2));
+        when(documentService.getDocumentChunks(eq(docId), eq(userId))).thenReturn(List.of(chunk1, chunk2));
 
         mockMvc.perform(get("/api/documents/{id}/chunks", docId)
                         .accept(MediaType.APPLICATION_JSON))
@@ -369,7 +379,7 @@ class DocumentControllerTest {
                 .andExpect(jsonPath("$[1].chunkIndex").value(1))
                 .andExpect(jsonPath("$[1].content").value("Chunk 2 content"));
 
-        verify(documentService).getDocumentChunks(eq(docId), any());
+        verify(documentService).getDocumentChunks(eq(docId), eq(userId));
     }
 
     @Test
@@ -381,7 +391,7 @@ class DocumentControllerTest {
                 UUID.randomUUID(), docId, 1, null, null, "Chunk content", 0
         );
 
-        when(documentService.generateAndSaveEmbeddings(eq(docId), any())).thenReturn(List.of(chunk1));
+        when(documentService.generateAndSaveEmbeddings(eq(docId), eq(userId))).thenReturn(List.of(chunk1));
 
         mockMvc.perform(post("/api/documents/{id}/embeddings", docId)
                         .accept(MediaType.APPLICATION_JSON))
@@ -389,7 +399,7 @@ class DocumentControllerTest {
                 .andExpect(jsonPath("$.length()").value(1))
                 .andExpect(jsonPath("$[0].content").value("Chunk content"));
 
-        verify(documentService).generateAndSaveEmbeddings(eq(docId), any());
+        verify(documentService).generateAndSaveEmbeddings(eq(docId), eq(userId));
     }
 
     @Test
@@ -402,7 +412,7 @@ class DocumentControllerTest {
         DocumentResponse docResp = new DocumentResponse(
                 docId, "contract.pdf", "application/pdf", 100L, DocumentStatus.READY, now, now
         );
-        when(documentService.getDocument(eq(docId), any())).thenReturn(docResp);
+        when(documentService.getDocument(eq(docId), eq(userId))).thenReturn(docResp);
 
         com.legalassist.dto.SimilaritySearchResultResponse resultItem = new com.legalassist.dto.SimilaritySearchResultResponse(
                 chunkId, docId, 2, 0, "Termination clause text", "Section 4", "Clause A", 0.94
@@ -441,8 +451,8 @@ class DocumentControllerTest {
                 docId, "test.pdf", "application/pdf", 100L, DocumentStatus.READY, now, now
         );
 
-        when(documentService.getDocument(eq(docId), any())).thenReturn(docResp);
-        when(documentService.downloadDocumentFile(eq(docId), any())).thenReturn("%PDF-1.4 test bytes".getBytes());
+        when(documentService.getDocument(eq(docId), eq(userId))).thenReturn(docResp);
+        when(documentService.downloadDocumentFile(eq(docId), eq(userId))).thenReturn("%PDF-1.4 test bytes".getBytes());
 
         mockMvc.perform(get("/api/documents/{id}/view", docId))
                 .andExpect(status().isOk())
@@ -450,7 +460,7 @@ class DocumentControllerTest {
                         org.springframework.http.HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"test.pdf\""
                 ));
 
-        verify(documentService).downloadDocumentFile(eq(docId), any());
+        verify(documentService).downloadDocumentFile(eq(docId), eq(userId));
     }
 
     @Test
@@ -461,7 +471,7 @@ class DocumentControllerTest {
         mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete("/api/documents/{id}", docId))
                 .andExpect(status().isNoContent());
 
-        verify(documentService).deleteDocument(eq(docId), any());
+        verify(documentService).deleteDocument(eq(docId), eq(userId));
     }
 
     @Test
@@ -478,13 +488,37 @@ class DocumentControllerTest {
                 docId, "new_contract.pdf", "application/pdf", 200L, DocumentStatus.READY, now, now
         );
 
-        when(documentService.replaceDocument(eq(docId), any(), any())).thenReturn(updatedResp);
+        when(documentService.replaceDocument(eq(docId), any(), eq(userId))).thenReturn(updatedResp);
 
         mockMvc.perform(multipart("/api/documents/{id}/replace", docId).file(newFile))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(docId.toString()))
                 .andExpect(jsonPath("$.filename").value("new_contract.pdf"));
 
-        verify(documentService).replaceDocument(eq(docId), any(), any());
+        verify(documentService).replaceDocument(eq(docId), any(), eq(userId));
+    }
+
+    @Test
+    @DisplayName("Unauthenticated request to GET /api/documents should return 401 Unauthorized")
+    void unauthenticatedGetDocumentsFails() throws Exception {
+        SecurityContextHolder.clearContext();
+
+        mockMvc.perform(get("/api/documents")
+                        .accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    @DisplayName("GET /api/documents with attacker query userId ignores query parameter and uses SecurityContext identity")
+    void getDocumentsIgnoresAttackerUserId() throws Exception {
+        UUID attackerId = UUID.randomUUID();
+        when(documentService.getUserDocuments(userId)).thenReturn(Collections.emptyList());
+
+        mockMvc.perform(get("/api/documents")
+                        .param("userId", attackerId.toString())
+                        .accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk());
+
+        verify(documentService).getUserDocuments(userId);
     }
 }

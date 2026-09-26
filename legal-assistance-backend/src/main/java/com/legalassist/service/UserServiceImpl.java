@@ -29,7 +29,7 @@ public class UserServiceImpl implements UserService {
     @Transactional
     public User getOrCreateUser(UUID internalId) {
         if (internalId == null) {
-            internalId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+            throw new IllegalArgumentException("User ID must not be null");
         }
 
         Optional<User> existingUser = userRepository.findById(internalId);

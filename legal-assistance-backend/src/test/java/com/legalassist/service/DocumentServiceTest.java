@@ -267,7 +267,7 @@ class DocumentServiceTest {
         DocumentResponse response = documentService.extractAndSaveDocumentText(docId);
 
         assertThat(response).isNotNull();
-        assertThat(response.status()).isEqualTo(DocumentStatus.READY);
+        assertThat(response.status()).isEqualTo(DocumentStatus.PROCESSING);
 
         @SuppressWarnings("unchecked")
         ArgumentCaptor<List<DocumentPage>> pagesCaptor = ArgumentCaptor.forClass(List.class);
@@ -330,7 +330,7 @@ class DocumentServiceTest {
         Instant now = Instant.now();
         Document document = new Document(
                 docId, UUID.randomUUID(), "contract.pdf", "application/pdf",
-                "storage/path/contract.pdf", 2048L, DocumentStatus.READY, now, now
+                "storage/path/contract.pdf", 2048L, DocumentStatus.PROCESSING, now, now
         );
 
         DocumentPage page1 = new DocumentPage(UUID.randomUUID(), docId, 1, "Page 1 content text", now);
@@ -360,7 +360,7 @@ class DocumentServiceTest {
     }
 
     @Test
-    @DisplayName("chunkAndSaveDocument should throw IllegalStateException when document status is not READY")
+    @DisplayName("chunkAndSaveDocument should throw IllegalStateException when document status is UPLOADED")
     void chunkAndSaveDocumentShouldThrowWhenNotReady() {
         UUID docId = UUID.randomUUID();
         Document document = new Document(
@@ -384,7 +384,7 @@ class DocumentServiceTest {
         UUID docId = UUID.randomUUID();
         Document document = new Document(
                 docId, UUID.randomUUID(), "contract.pdf", "application/pdf",
-                "storage/path/contract.pdf", 2048L, DocumentStatus.READY, Instant.now(), Instant.now()
+                "storage/path/contract.pdf", 2048L, DocumentStatus.PROCESSING, Instant.now(), Instant.now()
         );
 
         DocumentPage emptyPage = new DocumentPage(UUID.randomUUID(), docId, 1, "   ", Instant.now());
@@ -434,13 +434,13 @@ class DocumentServiceTest {
     }
 
     @Test
-    @DisplayName("generateAndSaveEmbeddings should generate RETRIEVAL_DOCUMENT embeddings and update chunks")
+    @DisplayName("generateAndSaveEmbeddings should generate RETRIEVAL_DOCUMENT embeddings, save chunks, and mark document READY")
     void generateAndSaveEmbeddingsSuccess() {
         UUID docId = UUID.randomUUID();
         Instant now = Instant.now();
         Document document = new Document(
                 docId, UUID.randomUUID(), "contract.pdf", "application/pdf",
-                "storage/path/contract.pdf", 2048L, DocumentStatus.READY, now, now
+                "storage/path/contract.pdf", 2048L, DocumentStatus.PROCESSING, now, now
         );
 
         com.legalassist.entity.DocumentChunk chunk1 = new com.legalassist.entity.DocumentChunk(
@@ -451,22 +451,25 @@ class DocumentServiceTest {
         when(documentChunkRepository.findByDocumentIdOrderByChunkIndexAsc(docId)).thenReturn(List.of(chunk1));
         when(embeddingService.generateEmbedding(eq("Clause content 1"), eq(com.legalassist.service.embedding.EmbeddingTaskType.RETRIEVAL_DOCUMENT)))
                 .thenReturn(List.of(0.6f, 0.8f));
+        when(documentRepository.save(any(Document.class))).thenAnswer(inv -> inv.getArgument(0));
 
         List<com.legalassist.dto.DocumentChunkResponse> response = documentService.generateAndSaveEmbeddings(docId);
 
         assertThat(response).hasSize(1);
         assertThat(response.get(0).documentId()).isEqualTo(docId);
+        assertThat(document.getStatus()).isEqualTo(DocumentStatus.READY);
         verify(embeddingService).generateEmbedding("Clause content 1", com.legalassist.service.embedding.EmbeddingTaskType.RETRIEVAL_DOCUMENT);
         verify(documentChunkRepository).saveAll(any());
+        verify(documentRepository).save(document);
     }
 
     @Test
-    @DisplayName("generateAndSaveEmbeddings should throw IllegalStateException when document status is not READY")
-    void generateAndSaveEmbeddingsShouldThrowWhenNotReady() {
+    @DisplayName("generateAndSaveEmbeddings should throw IllegalStateException when document status is FAILED")
+    void generateAndSaveEmbeddingsShouldThrowWhenInvalidStatus() {
         UUID docId = UUID.randomUUID();
         Document document = new Document(
                 docId, UUID.randomUUID(), "contract.pdf", "application/pdf",
-                "storage/path/contract.pdf", 2048L, DocumentStatus.UPLOADED, Instant.now(), Instant.now()
+                "storage/path/contract.pdf", 2048L, DocumentStatus.FAILED, Instant.now(), Instant.now()
         );
 
         when(documentRepository.findById(docId)).thenReturn(Optional.of(document));
@@ -476,6 +479,33 @@ class DocumentServiceTest {
                 .hasMessageContaining("ready");
 
         verify(embeddingService, never()).generateEmbedding(anyString(), any());
+    }
+
+    @Test
+    @DisplayName("generateAndSaveEmbeddings should set status to FAILED when embedding service throws exception")
+    void generateAndSaveEmbeddingsFailureSetsStatusFailed() {
+        UUID docId = UUID.randomUUID();
+        Instant now = Instant.now();
+        Document document = new Document(
+                docId, UUID.randomUUID(), "contract.pdf", "application/pdf",
+                "storage/path/contract.pdf", 2048L, DocumentStatus.PROCESSING, now, now
+        );
+
+        com.legalassist.entity.DocumentChunk chunk1 = new com.legalassist.entity.DocumentChunk(
+                UUID.randomUUID(), docId, 1, null, null, "Clause content 1", 0
+        );
+
+        when(documentRepository.findById(docId)).thenReturn(Optional.of(document));
+        when(documentChunkRepository.findByDocumentIdOrderByChunkIndexAsc(docId)).thenReturn(List.of(chunk1));
+        when(embeddingService.generateEmbedding(anyString(), any()))
+                .thenThrow(new com.legalassist.exception.EmbeddingException("AI service failed"));
+        when(documentRepository.save(any(Document.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        assertThatThrownBy(() -> documentService.generateAndSaveEmbeddings(docId))
+                .isInstanceOf(com.legalassist.exception.EmbeddingException.class);
+
+        assertThat(document.getStatus()).isEqualTo(DocumentStatus.FAILED);
+        verify(documentRepository).save(document);
     }
 
     @Test

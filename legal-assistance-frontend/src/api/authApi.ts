@@ -1,6 +1,6 @@
 import type { UserResponse, RegisterRequest, LoginRequest } from '../types/auth';
 import type { ApiErrorResponse } from '../types/document';
-import { API_ROOT_URL } from './config';
+import { API_ROOT_URL, withCsrfHeaders } from './config';
 
 const AUTH_URL = `${API_ROOT_URL}/api/auth`;
 
@@ -24,10 +24,10 @@ export const authApi = {
   async register(data: RegisterRequest): Promise<UserResponse> {
     const response = await fetch(`${AUTH_URL}/register`, {
       method: 'POST',
-      headers: {
+      headers: withCsrfHeaders({
         'Content-Type': 'application/json',
         'Accept': 'application/json',
-      },
+      }),
       credentials: 'include',
       body: JSON.stringify(data),
     });
@@ -37,10 +37,10 @@ export const authApi = {
   async login(data: LoginRequest): Promise<UserResponse> {
     const response = await fetch(`${AUTH_URL}/login`, {
       method: 'POST',
-      headers: {
+      headers: withCsrfHeaders({
         'Content-Type': 'application/json',
         'Accept': 'application/json',
-      },
+      }),
       credentials: 'include',
       body: JSON.stringify(data),
     });
@@ -50,6 +50,7 @@ export const authApi = {
   async logout(): Promise<void> {
     const response = await fetch(`${AUTH_URL}/logout`, {
       method: 'POST',
+      headers: withCsrfHeaders(),
       credentials: 'include',
     });
     if (!response.ok) {

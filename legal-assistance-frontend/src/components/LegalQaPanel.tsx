@@ -23,8 +23,10 @@ export const LegalQaPanel: React.FC<LegalQaPanelProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [answerResponse, setAnswerResponse] = useState<LegalAnswerResponse | null>(null);
 
-  const selectedCount = selectedDocIds.size;
-  const isReadyToAsk = selectedCount > 0;
+  const selectedDocsArray = documentsList.filter((d) => d && selectedDocIds.has(d.id));
+  const selectedCount = selectedDocsArray.length;
+  const allSelectedReady = selectedCount > 0 && selectedDocsArray.every((d) => d.status === 'READY');
+  const isReadyToAsk = selectedCount > 0 && allSelectedReady;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -32,6 +34,11 @@ export const LegalQaPanel: React.FC<LegalQaPanelProps> = ({
 
     if (selectedCount === 0) {
       setError('Please select at least one document from the list above before asking a question.');
+      return;
+    }
+
+    if (!allSelectedReady) {
+      setError('Selected document(s) are still processing embeddings. Please wait until status becomes READY.');
       return;
     }
 
@@ -84,6 +91,15 @@ export const LegalQaPanel: React.FC<LegalQaPanelProps> = ({
           </div>
           <div style={{ fontSize: '0.78rem', color: 'var(--text-main)' }}>
             Please select at least one document from the document list above before asking a question.
+          </div>
+        </div>
+      ) : !allSelectedReady ? (
+        <div className="doc-selector-box" style={{ padding: '12px 14px', flexDirection: 'column', alignItems: 'flex-start', gap: '4px', borderColor: 'rgba(234, 179, 8, 0.4)', background: 'rgba(234, 179, 8, 0.1)' }}>
+          <div style={{ fontSize: '0.84rem', fontWeight: 600, color: '#EAB308', display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <span>⏳</span> Document Processing in Progress
+          </div>
+          <div style={{ fontSize: '0.78rem', color: 'var(--text-main)' }}>
+            Vector embeddings are currently being generated for selected document(s). Q&A will be enabled once status becomes READY.
           </div>
         </div>
       ) : (
